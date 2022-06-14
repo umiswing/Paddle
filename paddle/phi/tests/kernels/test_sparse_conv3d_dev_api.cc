@@ -24,6 +24,7 @@ limitations under the License. */
 #include "paddle/fluid/memory/allocation/allocator_facade.h"
 #include "paddle/phi/api/lib/utils/allocator.h"
 #include "paddle/phi/core/kernel_registry.h"
+#include <fstream>
 
 namespace phi {
 namespace tests {
@@ -106,11 +107,14 @@ void TestConv3dBase(const std::vector<IntT>& indices,
 
   auto f_verify = [&](const T* real_data, const std::vector<T>& correct_data) {
     for (uint64_t i = 0; i < correct_data.size(); i++) {
+      //EXPECT_TRUE(false) << i << ':' << correct_data[i] << ',' << real_data[i];
+      //EXPECT_TRUE(false) << i<<':'<<real_data[i];
       float tmp = std::fabs(static_cast<float>(correct_data[i] - real_data[i]));
       ASSERT_LT(tmp, diff);
     }
   };
 
+  #if 0
   if (!std::is_same<T, phi::dtype::float16>::value) {
     DenseTensor rulebook = phi::Empty(
         dev_ctx_cpu, DenseTensorMeta(indices_dtype, {1}, DataLayout::NCHW));
@@ -153,6 +157,7 @@ void TestConv3dBase(const std::vector<IntT>& indices,
       f_verify(std::get<1>(grads).data<T>(), kernel_grad);
     }
   }
+  #endif
 
 // test gpu
 #if defined(PADDLE_WITH_CUDA)
@@ -740,7 +745,7 @@ TEST(DEV_API, sparse_conv2d_subm) {
       0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 3, 3, 2, 2, 3};
 
   std::vector<float> features = {0.8854, 0.6505, -0.1999, 0.3583};
-  // 3*3*3=27
+  // 1*3*3=9
   std::vector<float> kernel = {
       0.9364, 0.9460, 0.6564, 0.7999, 0.2013, 0.3812, 0.5474, 0.1016, 0.3368};
 
@@ -819,6 +824,80 @@ TEST(DEV_API, sparse_conv3d_subm) {
              features_grad,
              kernel_grad,
              true);
+}
+
+template <typename T>
+void read(const std::string fileName, std::vector<T>& tensor) {
+  std::ifstream file(fileName);
+  if (file) {
+    T v;
+    while (file >> v) {
+      tensor.push_back(v);
+    }
+  }
+  file.close();
+}
+
+TEST(DEV_API, sparse_conv3d_sparse) {
+  //const int in_channels = 1;
+  //const int out_channels = 16;
+  //const int batch_size = 8;
+  //DDim x_dims = {batch_size, 41, 1600, 1408, in_channels};
+  //DDim kernel_dims = {3, 3, 3, in_channels, out_channels};
+  //DDim out_dims = {batch_size, 39, 1598, 1406, out_channels};
+  //std::vector<int> paddings = {0, 0, 0};
+  //std::vector<int> strides = {1, 1, 1};
+  //std::vector<int> dilations = {1, 1, 1};
+
+  //const int non_zero_num = 136000;
+  const int batch_size = 8;
+  const int x = 41;
+  const int y = 1600;
+  const int z = 1408;
+  // kernel size
+  const int kx = 3;
+  const int ky = 3;
+  const int kz = 3;
+  const int in_channels = 4;
+  const int out_channels = 16;
+  const int non_zero_num = 136000;
+  std::vector<int> paddings = {0, 0, 0};
+  std::vector<int> strides = {1, 1, 1};
+  std::vector<int> dilations = {1, 1, 1};
+  DDim x_dims = {batch_size, x, y, z, in_channels};
+  DDim kernel_dims = {kx, ky, kz, in_channels, out_channels};
+  DDim out_dims = {
+      batch_size, x - kx + 1, y - ky + 1, z - kz + 1, out_channels};
+
+
+  std::vector<int> indices_flatten;
+  read<int>("/paddle/indices", indices_flatten);
+
+  std::vector<float> features;
+  read<float>("/paddle/features", features);
+
+  // 3*3*3=27
+  std::vector<float> kernel; 
+  read<float>("/paddle/kernel", kernel);
+
+  std::vector<int> out_indices_flatten;
+  read<int>("/paddle/out_indices", out_indices_flatten);
+
+  std::vector<float> out_features;
+  read<float>("/paddle/out_features", out_features);
+
+  TestConv3d(indices_flatten,
+             features,
+             x_dims,
+             kernel,
+             kernel_dims,
+             out_indices_flatten,
+             out_features,
+             out_dims,
+             non_zero_num,
+             paddings,
+             strides,
+             dilations);
 }
 
 }  // namespace tests
