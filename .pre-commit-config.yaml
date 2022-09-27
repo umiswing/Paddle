@@ -51,7 +51,7 @@ repos:
     -   id: cpplint-cpp-source
         name: cpplint
         description: Check C++ code style using cpplint.py.
-        entry: bash ./tools/codestyle/cpplint_pre_commit.hook --exclude=paddle/phi/kernels/sparse/gpu/gather_gemm_grouped.h
+        entry: bash ./tools/codestyle/cpplint_pre_commit.hook --exclude=paddle/phi/kernels/sparse/gpu/gather_gemm_grouped.h --exclude=paddle/p_cudf/*
         language: system
         files: \.(c|cc|cxx|cpp|cu|h|hpp|hxx)$
         args:
