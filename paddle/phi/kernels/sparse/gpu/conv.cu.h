@@ -619,7 +619,7 @@ int ProductRuleBook(const Context& dev_ctx,
     phi::Copy(dev_ctx, x.indices(), dev_ctx.GetPlace(), false, &out_indices);
 
     auto out_index_table_ptr = new concurrent_unordered_map<int, int, -1>(
-        non_zero_num * (1 / 0.7), -1);
+        non_zero_num * 2.5, -1);
 
     auto config =
         phi::backends::gpu::GetGpuLaunchConfig1D(dev_ctx, non_zero_num, 1);
