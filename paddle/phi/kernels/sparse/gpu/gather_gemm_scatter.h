@@ -115,6 +115,111 @@ void launchKernel(const GPUContext& dev_ctx,
   CUTLASS_CHECK(status);
   gemm_op(dev_ctx.stream());
 }
+  template<typename T, typename IntT>
+  dispatchKernel(const GPUContext& dev_ctx,
+		 const T* const a,
+		 const T* const b,
+		 const T* const c,
+		 T* const d,
+		 const int m,
+		 const int n,
+		 const int k,
+		 const IntT* a_indices,
+		 const IntT* c_d_indices,
+		 T const alpha,
+		 T const beta);
+  template<phi::dtype::float16, int32_t>
+  dispatchKernel(const GPUContext& dev_ctx,
+		 const phi::dtype::float16* const a,
+		 const phi::dtype::float16* const b,
+		 const phi::dtype::float16* const c,
+		 phi::dtype::float16* const d,
+		 const int m,
+		 const int n,
+		 const int k,
+		 const int32_t* a_indices,
+		 const int32_t* c_d_indices,
+		 phi::dtype::float16 const alpha,
+		 phi::dtype::float16 const beta) {
+    fp16_gather_gemm_scatter gather_gemm_scatter =
+      getBestFp16Kernel(M, N, K);
+    gather_gemm_scatter(
+			dev_ctx,
+			reinterpret_cast<const cutlass::half_t*>(
+								 x.non_zero_elements().data<T>()),
+			reinterpret_cast<const cutlass::half_t*>(tmp_kernel_ptr),
+			reinterpret_cast<cutlass::half_t*>(out_values_ptr),
+			reinterpret_cast<cutlass::half_t*>(out_values_ptr),
+			M,
+			N,
+			K,
+			static_cast<const int32_t*>(gather_indices),
+			static_cast<const int32_t*>(scatter_indices),
+			static_cast<cutlass::half_t>(1),
+			static_cast<cutlass::half_t>(1));
+
+  }
+  template<float, int32_t>
+  dispatchKernel(const GPUContext& dev_ctx,
+		 const float* const a,
+		 const float* const b,
+		 const float* const c,
+		 float* const d,
+		 const int m,
+		 const int n,
+		 const int k,
+		 const int32_t* a_indices,
+		 const int32_t* c_d_indices,
+		 float const alpha,
+		 float const beta) {
+    fp32_gather_gemm_scatter gather_gemm_scatter =
+      getBestFp32Kernel(M, N, K, dev_ctx.GetComputeCapability());
+    gather_gemm_scatter(dev_ctx,
+			x.non_zero_elements().data<T>(),
+			tmp_kernel_ptr,
+			out_values_ptr,
+			out_values_ptr,
+			M,
+			N,
+			K,
+			gather_indices,
+			scatter_indices,
+			static_cast<T>(1),
+			static_cast<T>(1));
+
+
+  }
+  template<double, int32_t>
+  dispatchKernel(const GPUContext& dev_ctx,
+		 const double* const a,
+		 const double* const b,
+		 const double* const c,
+		 double* const d,
+		 const int m,
+		 const int n,
+		 const int k,
+		 const int32_t* a_indices,
+		 const int32_t* c_d_indices,
+		 double const alpha,
+		 double const beta) {
+
+    fp64_gather_gemm_scatter gather_gemm_scatter =
+      getBestFp64Kernel(M, N, K);
+    gather_gemm_scatter(dev_ctx,
+			x.non_zero_elements().data<T>(),
+			tmp_kernel_ptr,
+			out_values_ptr,
+			out_values_ptr,
+			M,
+			N,
+			K,
+			gather_indices,
+			scatter_indices,
+			static_cast<T>(1),
+			static_cast<T>(1));
+
+  }
+
 struct cutlass_tensorop_h1688gemm_128x64_32x2_nn_align8 {
   using Gemm = cutlass::gemm::device::GemmUniversal<
       cutlass::half_t,
