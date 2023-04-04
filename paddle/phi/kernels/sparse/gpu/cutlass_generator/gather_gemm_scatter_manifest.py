@@ -29,9 +29,6 @@ class GatherGemmScatterEmitOperationKindLibrary(EmitOperationKindLibrary):
             OperationKind.Gemm: EmitGatherGemmScatterConfigurationLibrary
         }
         self.header_template = "#pragma once\n#ifdef PADDLE_WITH_CUTLASS\n#include \"paddle/phi/kernels/sparse/gpu/cutlass_generator/common.h\"\n"
-        self.entry_template = ""
-        self.configuration_prototype_template = ""
-        self.configuration_template = ""
         self.namespace_template = """
 namespace phi {
 namespace sparse {
@@ -59,9 +56,17 @@ namespace sparse {
             "all_%s_operations.h" % OperationKindNames[self.kind],
         )
 
+        self.top_level_grad_path = os.path.join(
+            self.operation_path,
+            "all_%s_grad_operations.h" % OperationKindNames[self.kind],
+        )
+
         self.top_level_file = open(self.top_level_path, "w")
         self.top_level_file.write(self.header_template)
 
+        self.top_level_grad_file = open(self.top_level_grad_path, "w")
+        self.top_level_grad_file.write(self.header_template)
+        
         self.source_files = [
             self.top_level_path,
         ]
@@ -99,37 +104,37 @@ launchKernel<"""
                 + "<>>,"
             )
 
-        self.top_level_file.write(
-            '#include "'
-            + self.operation_path
-            + '/'
-            + configuration_name
-            + '.h"\n'
-        )
+        if operations[0].layout_name() == 'nn':
+            self.top_level_file.write(
+                '#include "'
+                + self.operation_path
+                + '/'
+                + configuration_name
+                + '.h"\n'
+            )
+        else:
+            self.top_level_grad_file.write(
+                '#include "'
+                + self.operation_path
+                + '/'
+                + configuration_name
+                + '.h"\n'
+            )
 
     def __exit__(self, exception_type, exception_value, traceback):
-        self.top_level_file.write(
-            SubstituteTemplate(
-                self.entry_template,
-                {'operation_name': OperationKindNames[self.kind]},
-            )
-        )
-
-        for configuration_name in self.configurations:
-            self.top_level_file.write(
-                SubstituteTemplate(
-                    self.configuration_template,
-                    {'configuration_name': configuration_name},
-                )
-            )
-
         for k, v in self.kernels_lists.items():
             self.kernels_lists[k] += "\n};\n"
         self.top_level_file.write(self.namespace_template)
+        self.top_level_grad_file.write(self.namespace_template)
         for k, v in self.kernels_lists.items():
-            self.top_level_file.write(v)
+            if k == "snt" or k == "stn":
+                self.top_level_grad_file.write(v)
+            else:
+                self.top_level_file.write(v)
         self.top_level_file.write(self.epilogue_template)
         self.top_level_file.close()
+        self.top_level_grad_file.write(self.epilogue_template)
+        self.top_level_grad_file.close()        
 
 
 class GatherGemmScatterManifest(Manifest):

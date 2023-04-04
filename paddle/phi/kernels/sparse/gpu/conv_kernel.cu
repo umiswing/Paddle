@@ -24,12 +24,22 @@ limitations under the License. */
 #include "paddle/phi/kernels/sparse/gpu/conv.cu.h"
 #ifdef PADDLE_WITH_CUTLASS
 #include "paddle/phi/kernels/sparse/gpu/gather_gemm_scatter.h"
+#include "paddle/phi/kernels/sparse/gpu/cutlass_generator/build/generated/gemm/all_gemm_operations.h"
 #endif
 
 #include "glog/logging.h"
 
 namespace phi {
 namespace sparse {
+
+EXPLICIT_SPECIALIZE_GATHER_GEMM_SCATTER_DRIVER(phi::dtype::float16,
+                                               fp16_nn_kernels,
+                                               false,
+                                               false)
+EXPLICIT_SPECIALIZE_GATHER_GEMM_SCATTER_DRIVER(float,
+                                               fp32_nn_kernels,
+                                               false,
+                                               false)
 
 template <typename T, typename IntT>
 void Conv3dCooGPUKernel(const GPUContext& dev_ctx,

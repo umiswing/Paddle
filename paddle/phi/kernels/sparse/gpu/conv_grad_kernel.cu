@@ -26,11 +26,21 @@ limitations under the License. */
 #include "paddle/phi/kernels/sparse/gpu/conv.cu.h"
 #ifdef PADDLE_WITH_CUTLASS
 #include "paddle/phi/kernels/sparse/gpu/gather_gemm_scatter.h"
+#include "paddle/phi/kernels/sparse/gpu/cutlass_generator/build/generated/gemm/all_gemm_grad_operations.h"
 #endif
 
 namespace phi {
 namespace sparse {
 extern size_t workspace_size;
+
+EXPLICIT_SPECIALIZE_GATHER_GEMM_SCATTER_DRIVER(float,
+                                               fp32_nt_kernels,
+                                               false,
+                                               true)
+EXPLICIT_SPECIALIZE_GATHER_GEMM_SCATTER_DRIVER(float,
+                                               fp32_tn_kernels,
+                                               true,
+                                               false)
 
 // rulebook[3, rulebook_len]:
 //[

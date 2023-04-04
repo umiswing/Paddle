@@ -18,7 +18,7 @@
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/common/data_type.h"
 #include "paddle/phi/kernels/autotune/auto_tune_base.h"
-#include "paddle/phi/kernels/sparse/gpu/cutlass_generator/build/generated/gemm/all_gemm_operations.h"
+#include "paddle/phi/kernels/sparse/gpu/cutlass_generator/common.h"
 
 namespace phi {
 namespace sparse {
@@ -48,7 +48,7 @@ void GatherGemmScatterDriver(
 #define EXPLICIT_SPECIALIZE_GATHER_GEMM_SCATTER_DRIVER(                       \
     T, kernels, transpose_a, transpose_b)                                     \
   template <>                                                                 \
-  inline void GatherGemmScatterDriver<T, int32_t, transpose_a, transpose_b>(  \
+  void GatherGemmScatterDriver<T, int32_t, transpose_a, transpose_b>(  \
       const phi::GPUContext& ctx,                                             \
       const size_t key,                                                       \
       const T* const a,                                                       \
@@ -85,23 +85,6 @@ void GatherGemmScatterDriver(
                c_d_indices,                                                   \
                workspace_ptr);                                                \
   }
-
-EXPLICIT_SPECIALIZE_GATHER_GEMM_SCATTER_DRIVER(phi::dtype::float16,
-                                               fp16_nn_kernels,
-                                               false,
-                                               false)
-EXPLICIT_SPECIALIZE_GATHER_GEMM_SCATTER_DRIVER(float,
-                                               fp32_nn_kernels,
-                                               false,
-                                               false)
-EXPLICIT_SPECIALIZE_GATHER_GEMM_SCATTER_DRIVER(float,
-                                               fp32_nt_kernels,
-                                               false,
-                                               true)
-EXPLICIT_SPECIALIZE_GATHER_GEMM_SCATTER_DRIVER(float,
-                                               fp32_tn_kernels,
-                                               true,
-                                               false)
 
 }  // namespace sparse
 }  // namespace phi
