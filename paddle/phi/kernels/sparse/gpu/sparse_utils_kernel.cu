@@ -224,6 +224,8 @@ void CsrToCooGPUKernel(const GPUContext& dev_ctx,
 #ifdef PADDLE_WITH_HIP
   const auto& csr_crows = Cast<IntT>(dev_ctx, x.crows(), DataType::INT32);
   const auto& csr_cols = Cast<IntT>(dev_ctx, x.cols(), DataType::INT32);
+  // const auto& csr_crows = x.crows();
+  // const auto& csr_cols = x.cols();
   const int* csr_crows_data = csr_crows.template data<int>();
   const int* csr_cols_data = csr_cols.template data<int>();
 #else

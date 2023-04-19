@@ -24,6 +24,7 @@
 #include "paddle/phi/core/sparse_coo_tensor.h"
 #include "paddle/phi/core/sparse_csr_tensor.h"
 #include "paddle/phi/core/visit_type.h"
+#include "paddle/phi/kernels/cast_kernel.h"
 namespace phi {
 namespace funcs {
 namespace sparse {
@@ -82,8 +83,19 @@ inline void CreateCsrDescriptor(const phi::SparseCsrTensor& x,
                     phi::errors::PreconditionNotMet(
                         "the length of SparseCsrTensor crows is not right."));
 
-  const IntT* crows_data = x.non_zero_crows().data<IntT>();
-  const IntT* cols_data = x.non_zero_cols().data<IntT>();
+  int64_t* crows_data = nullptr;
+  int64_t* cols_data = nullptr;
+  if (std::is_same<IntT, int32_t>::value) {
+    DenseTensor x_nnz_crows_int64 = phi::Cast<int32_t, GPUContext>(
+        dev_ctx, x.non_zero_crows(), DataType::INT64);
+    DenseTensor x_nnz_cols_int64 = phi::Cast<int32_t, GPUContext>(
+        dev_ctx, x.non_zero_cols(), DataType::INT64);
+    crows_data = x_nnz_crows_int64.data<int64_t>();
+    cols_data = x_nnz_cols_int64.data<int64_t>();
+  } else {
+    crows_data = const_cast<int64_t*>(x.non_zero_crows().data<int64_t>());
+    cols_data = const_cast<int64_t*>(x.non_zero_cols().data<int64_t>());
+  }
   const T* values_data = x.non_zero_elements().data<T>();
 
   int64_t batch_nnz = x.nnz() / batch_size;
@@ -95,8 +107,8 @@ inline void CreateCsrDescriptor(const phi::SparseCsrTensor& x,
                                              M,
                                              N,
                                              batch_nnz,
-                                             const_cast<IntT*>(crows_data),
-                                             const_cast<IntT*>(cols_data),
+                                             crows_data,
+                                             cols_data,
                                              const_cast<T*>(values_data),
                                              itype,
                                              jtype,
@@ -131,7 +143,14 @@ inline void CreateCooDescriptor(const phi::SparseCooTensor& x,
   }
   int64_t nnz = x.nnz();
 
-  const IntT* indices_data = x.non_zero_indices().data<IntT>();
+  int64_t* indices_data = nullptr;
+  if (std::is_same<IntT, int32_t>::value) {
+    DenseTensor x_nnz_indices_int64 = phi::Cast<int32_t, GPUContext>(
+        dev_ctx, x.non_zero_indices(), DataType::INT64);
+    indices_data = x_nnz_indices_int64.data<int64_t>();
+  } else {
+    indices_data = const_cast<int64_t*>(x.non_zero_indices().data<int64_t>());
+  }
   const T* values_data = x.non_zero_elements().data<T>();
   auto rows_data = indices_data + (x_ndims - 2) * nnz;
   auto cols_data = indices_data + (x_ndims - 1) * nnz;
@@ -144,8 +163,8 @@ inline void CreateCooDescriptor(const phi::SparseCooTensor& x,
                                              M,
                                              N,
                                              batch_nnz,
-                                             const_cast<IntT*>(rows_data),
-                                             const_cast<IntT*>(cols_data),
+                                             rows_data,
+                                             cols_data,
                                              const_cast<T*>(values_data),
                                              itype,
                                              rocsparse_index_base_zero,

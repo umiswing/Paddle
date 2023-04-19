@@ -102,7 +102,10 @@ void MatmulCsrDenseGradKernel(const Context& dev_ctx,
   if (dx) {
     // InferMeta of SparseCsrTensor 'dx', CreateLikeInferMeta
     EmptyLikeCsrKernel<T, Context>(dev_ctx, x, dx);
-
+#ifdef PADDLE_WITH_HIP
+    phi::funcs::SetConstant<Context, T> set_zero;
+    set_zero(dev_ctx, dx->mutable_non_zero_elements(), static_cast<T>(0.0f));
+#endif
     sparse_blas.SDDMM(
         false, true, static_cast<T>(1), dout, y, static_cast<T>(0), dx);
   }
