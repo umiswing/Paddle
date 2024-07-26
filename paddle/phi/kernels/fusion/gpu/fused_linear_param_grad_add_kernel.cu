@@ -44,6 +44,13 @@ void FusedLinearParamGradAddImpl(const Context &ctx,
                                  bool has_bias,
                                  DenseTensor *dweight_out,
                                  DenseTensor *dbias_out) {
+#if 0
+  int num_gemm_sm = 0;
+  if (const char* env_p = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env_p);
+  if constexpr (std::is_same<Context, phi::GPUContext>::value) {
+    ctx.SetNumGemmSM(num_gemm_sm);
+  }
+#endif
   constexpr bool kIsMultiPrecision = !std::is_same<T, MT>::value;
 
   const bool fuse_bias_grad = false;  // kIsMultiPrecision && dweight_out;
@@ -109,6 +116,11 @@ void FusedLinearParamGradAddImpl(const Context &ctx,
       phi::AddKernel<T, Context>(ctx, dbias.get(), *dbias_tmp, dbias_out);
     }
   }
+#if 0
+  if constexpr (std::is_same<Context, phi::GPUContext>::value) {
+    ctx.SetNumGemmSM(0);
+  }
+#endif
 }
 
 template <int LogLevel = 10>

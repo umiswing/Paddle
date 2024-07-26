@@ -228,6 +228,13 @@ void MatmulGradKernel(const Context& dev_ctx,
                       bool transpose_y,
                       DenseTensor* dx,
                       DenseTensor* dy) {
+#if 0
+  int num_gemm_sm = 0;
+  if (const char* env_p = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env_p);
+  if constexpr (std::is_same<Context, phi::GPUContext>::value) {
+    dev_ctx.SetNumGemmSM(num_gemm_sm);
+  }
+#endif
   // get dims
   std::vector<std::int64_t> x_dims = common::vectorize(x.dims());
   std::vector<std::int64_t> y_dims = common::vectorize(y.dims());
@@ -472,6 +479,11 @@ void MatmulGradKernel(const Context& dev_ctx,
     }
     // Get the OutputGrad(out)
   }
+#if 0
+  if constexpr (std::is_same<Context, phi::GPUContext>::value) {
+    dev_ctx.SetNumGemmSM(0);
+  }
+#endif
 }
 
 template <typename T, typename Context>

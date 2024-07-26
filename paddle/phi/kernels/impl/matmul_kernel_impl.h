@@ -925,10 +925,14 @@ struct MatMulDispatcher<phi::GPUContext, T> {
     auto* tuner = phi::autotune::MakeMatmulTuner<T>(
         MatMulFunctionImplWithBlas<phi::GPUContext, T>);
     tuner->AddCallBack(MatMulFunctionImplWithCublasLt<phi::GPUContext, T>);
+    int num_gemm_sm = 0;
+    if (const char* env_p = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env_p);
     phi::funcs::MatmulPlanner matmul_planner(x_dims,
                                              y_dims,
                                              trans_x,
                                              trans_y,
+                                             num_gemm_sm,
+                                             // ctx.GetNumGemmSM(),
                                              phi::CppTypeToDataType<T>::Type(),
                                              funcs::MatmulFusedType::kMatmul,
                                              /* bias_data */ nullptr,
@@ -1002,11 +1006,16 @@ bool inline MatMulInt8Function(const phi::GPUContext& ctx,
   const int8_t* y_data = y.data<int8_t>();
   using blaslt = phi::funcs::MatmulWithCublasLt<int8_t, int32_t>;
 
+  int num_gemm_sm = 0;
+  if (const char* env_p = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env_p);
+
   phi::funcs::MatmulPlanner matmul_planner(
       x_dims,
       y_dims,
       trans_x,
       trans_y,
+      num_gemm_sm,
+      // ctx.GetNumGemmSM(),
       phi::CppTypeToDataType<int8_t>::Type(),
       funcs::MatmulFusedType::kMatmul,
       /* bias_data */ nullptr,
@@ -1573,6 +1582,13 @@ void MatmulKernel(const Context& ctx,
                   bool transpose_x,
                   bool transpose_y,
                   DenseTensor* out) {
+#if 0
+  int num_gemm_sm = 0;
+  if (const char* env_p = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env_p);
+  if constexpr (std::is_same<Context, phi::GPUContext>::value) {
+    ctx.SetNumGemmSM(num_gemm_sm);
+  }
+#endif
   PADDLE_ENFORCE_NE(
       common::product(x.dims()),
       0,
@@ -1587,6 +1603,12 @@ void MatmulKernel(const Context& ctx,
   const std::vector<std::int64_t> y_dims = common::vectorize(y.dims());
   MatmulJudgeDtypeKernel<Context, T>(
       ctx, x, y, x_dims, y_dims, out, transpose_x, transpose_y);
+
+#if 0
+  if constexpr (std::is_same<Context, phi::GPUContext>::value) {
+    ctx.SetNumGemmSM(0);
+  }
+#endif
 }
 
 template <typename T, typename Context>
@@ -1687,11 +1709,15 @@ void MatmulWithFlattenKernelInt8Impl(const Context& dev_ctx,
 
   std::vector<std::int64_t> x_dims = {x_matrix.dims()[0], x_matrix.dims()[1]};
   std::vector<std::int64_t> y_dims = {y_matrix.dims()[0], y_matrix.dims()[1]};
+  int num_gemm_sm = 0;
+  if (const char* env_p = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env_p);
   phi::funcs::MatmulPlanner matmul_planner(
       x_dims,
       y_dims,
       false,
       false,
+      num_gemm_sm,
+      // dev_ctx.GetNumGemmSM(),
       phi::CppTypeToDataType<int8_t>::Type(),
       funcs::MatmulFusedType::kMatmul,
       /* bias_data */ nullptr,

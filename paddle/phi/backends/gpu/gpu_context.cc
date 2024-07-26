@@ -607,12 +607,18 @@ struct GPUContext::Impl {
 #endif
 #endif
     });
+    int num_gemm_sm = 0;
+    if (char* env = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env);
     if (blas_tf32_tensor_core_handle_ && phi::AllowTF32Cublas()) {
       std::lock_guard<std::mutex> guard(blas_tf32_mtx_);
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_tf32_tensor_core_handle_, num_gemm_sm));
       callback(blas_tf32_tensor_core_handle_);
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_tf32_tensor_core_handle_, 0));
     } else {
       std::lock_guard<std::mutex> guard(blas_mtx_);
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_handle_, num_gemm_sm));
       callback(blas_handle_);
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_handle_, 0));
     }
   }
 
@@ -652,12 +658,18 @@ struct GPUContext::Impl {
 #endif
 #endif
     });
+    int num_gemm_sm = 0;
+    if (char* env = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env);
     if (blas_tensor_core_handle_ != nullptr) {
       std::lock_guard<std::mutex> guard(blas_tensor_core_mtx_);
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_tf32_tensor_core_handle_, num_gemm_sm));
       callback(blas_tensor_core_handle_);
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_tf32_tensor_core_handle_, 0));
     } else {
       std::lock_guard<std::mutex> guard(blas_mtx_);
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_handle_, num_gemm_sm));
       callback(blas_handle_);
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_handle_, 0));
     }
   }
 
@@ -748,6 +760,16 @@ struct GPUContext::Impl {
 
   void ClearDnnAttr() { dnn_attrs_.clear(); }
 
+#if 0
+  void SetNumGemmSM(const int num_gemm_sm) {
+    num_gemm_sm_ = num_gemm_sm;
+  }
+
+  int GetNumGemmSM() const {
+    return num_gemm_sm_;
+  }
+#endif
+
   // use one flag for all handles?
   // they should be accessed consistently
   bool owned_{false};
@@ -816,9 +838,13 @@ struct GPUContext::Impl {
   // Because DeviceContext is a global singleton, you need to ensure thread
   // safety, use the thread_local variable
   static thread_local AttributeMap dnn_attrs_;
+
+  // static thread_local int num_gemm_sm_;
 };
 
 thread_local AttributeMap GPUContext::Impl::dnn_attrs_ = {};
+
+// thread_local int GPUContext::Impl::num_gemm_sm_ = 0;
 
 GPUContext::GPUContext(GPUContext&&) = default;  // NOLINT
 
@@ -878,6 +904,16 @@ int GPUContext::GetSMCount() const { return impl_->multi_process_; }
 int GPUContext::GetMaxThreadsPerBlock() const {
   return impl_->max_threads_per_block_;
 }
+
+#if 0
+int GPUContext::GetNumGemmSM() const {
+  return impl_->GetNumGemmSM();
+}
+
+void GPUContext::SetNumGemmSM(const int num_gemm_sm) {
+  return impl_->SetNumGemmSM(num_gemm_sm);
+}
+#endif
 
 std::array<unsigned int, 3> GPUContext::GetCUDAMaxGridDimSize() const {
   return impl_->max_grid_dim_size_;

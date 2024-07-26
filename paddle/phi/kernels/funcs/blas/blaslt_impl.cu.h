@@ -148,6 +148,7 @@ struct MatmulPlanner {
                 const std::vector<int64_t>& y_dims,
                 const bool trans_x,
                 const bool trans_y,
+                const int num_gemm_sm,
                 phi::DataType dtype,
                 MatmulFusedType fused_type,
                 const void* bias_data = nullptr,
@@ -160,6 +161,7 @@ struct MatmulPlanner {
                                  y_dims,
                                  static_cast<int>(trans_x),
                                  static_cast<int>(trans_y),
+                                 num_gemm_sm,
                                  static_cast<int>(dtype),
                                  static_cast<int>(fused_type_),
                                  static_cast<int>(use_addto_),
@@ -479,6 +481,17 @@ struct CublasLtBase {
     size_t workspace_size = static_cast<size_t>(4) * 1024 * 1024;
     phi::Allocator::AllocationPtr workspace = GetWorkspace(ctx, workspace_size);
 
+#if 0
+    int num_gemm_sm = ctx.GetNumGemmSM();
+#endif
+    int num_gemm_sm = 0;
+    if (char * env = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env);
+    PADDLE_ENFORCE_GPU_SUCCESS(
+        dynload::cublasLtMatmulDescSetAttribute(desc->op_desc,
+                                                CUBLASLT_MATMUL_DESC_SM_COUNT_TARGET,
+                                                &num_gemm_sm,
+                                                sizeof(num_gemm_sm))); // TODO(umiswing): don't use sizeof(int).
+
     if (planner != nullptr) {
       if (phi::autotune::AutoTuneStatus::Instance().UseAutoTune() &&
           (!desc->is_cached)) {
@@ -519,6 +532,14 @@ struct CublasLtBase {
                                 workspace->ptr(),
                                 workspace_size,
                                 ctx.stream()));
+
+    // umiswing: revert it after gemm.
+    num_gemm_sm = 0;
+    PADDLE_ENFORCE_GPU_SUCCESS(
+        dynload::cublasLtMatmulDescSetAttribute(desc->op_desc,
+                                                CUBLASLT_MATMUL_DESC_SM_COUNT_TARGET,
+                                                &num_gemm_sm,
+                                                sizeof(num_gemm_sm))); // TODO(umiswing): don't use sizeof(int).
   }
 
   static void SearchBestAlgo(const phi::GPUContext& ctx,
@@ -1042,10 +1063,13 @@ struct LinearWithCublasLt : public CublasLtBase<T> {
                   const bool trans_x,
                   const bool trans_y,
                   const MatmulFusedType fused_type) {
+    int num_gemm_sm = 0;
+    if (char * env = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env);
     auto planner = phi::funcs::MatmulPlanner(common::vectorize(x->dims()),
                                              common::vectorize(y->dims()),
                                              trans_x,
                                              trans_y,
+                                             num_gemm_sm,
                                              phi::CppTypeToDataType<T>::Type(),
                                              fused_type,
                                              bias_data,
@@ -1080,10 +1104,13 @@ struct LinearGradWithCublasLt : public CublasLtBase<T> {
       const bool use_addto,
       const bool no_exchange,  // exchange x_desc and y_desc for grad.
       bool grad_for_dx = true) {
+    int num_gemm_sm = 0;
+    if (const char* env_p = std::getenv("NUM_GEMM_SM")) num_gemm_sm = std::atoi(env_p);
     auto planner = phi::funcs::MatmulPlanner(common::vectorize(x->dims()),
                                              common::vectorize(y->dims()),
                                              trans_x,
                                              trans_y,
+                                             num_gemm_sm,
                                              phi::CppTypeToDataType<T>::Type(),
                                              fused_type,
                                              bias_data,

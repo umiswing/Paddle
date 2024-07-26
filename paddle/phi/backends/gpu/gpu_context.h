@@ -138,6 +138,12 @@ class PADDLE_API GPUContext : public DeviceContext,
   /*! \brief  Return the Max thread num of block in the device context */
   int GetMaxThreadsPerBlock() const;
 
+#if 0
+  int GetNumGemmSM() const;
+
+  void SetNumGemmSM(const int num_gemm_sm);
+#endif
+
   /*! \brief  Return the max grid dim size in the device context */
   std::array<unsigned int, 3> GetCUDAMaxGridDimSize() const;
 
