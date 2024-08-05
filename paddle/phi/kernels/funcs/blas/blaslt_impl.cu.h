@@ -492,6 +492,16 @@ struct CublasLtBase {
                                                 &num_gemm_sm,
                                                 sizeof(num_gemm_sm))); // TODO(umiswing): don't use sizeof(int).
 
+      int fuck_num_gemm_sm = -1;
+      size_t sizeWritten;
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          dynload::cublasLtMatmulDescGetAttribute(desc->op_desc,
+                                                  CUBLASLT_MATMUL_DESC_SM_COUNT_TARGET,
+                                                  &fuck_num_gemm_sm,
+                                                  sizeof(fuck_num_gemm_sm),
+                                                  &sizeWritten));
+      VLOG(4) << "lt fuck_num_gemm_sm:" << fuck_num_gemm_sm;
+
     if (planner != nullptr) {
       if (phi::autotune::AutoTuneStatus::Instance().UseAutoTune() &&
           (!desc->is_cached)) {
@@ -532,6 +542,16 @@ struct CublasLtBase {
                                 workspace->ptr(),
                                 workspace_size,
                                 ctx.stream()));
+
+      int fuck_num_gemm_sm2 = -1;
+      size_t sizeWritten2;
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          dynload::cublasLtMatmulDescGetAttribute(desc->op_desc,
+                                                  CUBLASLT_MATMUL_DESC_SM_COUNT_TARGET,
+                                                  &fuck_num_gemm_sm2,
+                                                  sizeof(fuck_num_gemm_sm2),
+                                                  &sizeWritten2));
+      VLOG(4) << "lt fuck_num_gemm_sm2:" << fuck_num_gemm_sm2;
 
     // umiswing: revert it after gemm.
     num_gemm_sm = 0;

@@ -612,11 +612,21 @@ struct GPUContext::Impl {
     if (blas_tf32_tensor_core_handle_ && phi::AllowTF32Cublas()) {
       std::lock_guard<std::mutex> guard(blas_tf32_mtx_);
       PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_tf32_tensor_core_handle_, num_gemm_sm));
+
+      int fuck_num_gemm_sm = -1;
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGetSmCountTarget(blas_tf32_tensor_core_handle_, &fuck_num_gemm_sm));
+      VLOG(4) << "ctx fuck_num_gemm_sm:" << fuck_num_gemm_sm;
+
       callback(blas_tf32_tensor_core_handle_);
       PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_tf32_tensor_core_handle_, 0));
     } else {
       std::lock_guard<std::mutex> guard(blas_mtx_);
       PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_handle_, num_gemm_sm));
+
+      int fuck_num_gemm_sm = -1;
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGetSmCountTarget(blas_handle_, &fuck_num_gemm_sm));
+      VLOG(4) << "ctx fuck_num_gemm_sm:" << fuck_num_gemm_sm;
+
       callback(blas_handle_);
       PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_handle_, 0));
     }
@@ -663,11 +673,21 @@ struct GPUContext::Impl {
     if (blas_tensor_core_handle_ != nullptr) {
       std::lock_guard<std::mutex> guard(blas_tensor_core_mtx_);
       PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_tf32_tensor_core_handle_, num_gemm_sm));
+
+      int fuck_num_gemm_sm = -1;
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGetSmCountTarget(blas_tf32_tensor_core_handle_, &fuck_num_gemm_sm));
+      VLOG(4) << "ctx fuck_num_gemm_sm:" << fuck_num_gemm_sm;
+
       callback(blas_tensor_core_handle_);
       PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_tf32_tensor_core_handle_, 0));
     } else {
       std::lock_guard<std::mutex> guard(blas_mtx_);
       PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_handle_, num_gemm_sm));
+
+      int fuck_num_gemm_sm = -1;
+      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGetSmCountTarget(blas_handle_, &fuck_num_gemm_sm));
+      VLOG(4) << "ctx fuck_num_gemm_sm:" << fuck_num_gemm_sm;
+
       callback(blas_handle_);
       PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSetSmCountTarget(blas_handle_, 0));
     }
