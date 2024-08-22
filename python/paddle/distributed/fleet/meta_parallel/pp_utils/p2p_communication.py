@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import distutils.util
+
 import os
+from distutils.util import strtobool
 
 import numpy as np
 
@@ -294,6 +295,16 @@ def batch_send_recv_on_calc_stream(p2p_op_list):
     group = p2p_op_list[0].group
     if _warn_cur_rank_not_in_group(group):
         return
+
+    need_check = strtobool(os.getenv('FLAGS_pp_check_naninf', '0'))
+    if need_check:
+        for p2p_op in p2p_op_list:
+            if p2p_op.op == _send_on_calc_stream:
+                if not paddle.isfinite(p2p_op.tensor).all().item():
+                    raise ValueError(
+                        f"Tensor contains inf or nan values at rank {paddle.distributed.get_rank()}"
+                    )
+
     group = _get_global_group() if group is None else group
     backend = group.backend
     tasks = []
@@ -435,9 +446,7 @@ def _batched_p2p_ops(
 
     if len(ops) > 0:
         batch_send_recv_on_calc_stream(ops)
-        if distutils.util.strtobool(
-            os.getenv('FLAGS_p2p_device_synchronize', '0')
-        ):
+        if strtobool(os.getenv('FLAGS_p2p_device_synchronize', '0')):
             paddle.device.cuda.synchronize()
 
     tensors_for_all_gather = []
@@ -467,6 +476,16 @@ def _batched_p2p_ops(
 def _p2p_ops_tuple_or_tensor(tensors, p2p_func, pp_rank, pp_group):
     if not isinstance(tensors, tuple):
         tensors = (tensors,)
+
+    need_check = strtobool(os.getenv('FLAGS_pp_check_naninf', '0'))
+    if need_check:
+        if p2p_func == paddle.distributed.isend:
+            for t in tensors:
+                if not paddle.isfinite(t).all().item():
+                    raise ValueError(
+                        f"Tensor contains inf or nan values at rank {paddle.distributed.get_rank()}"
+                    )
+
     reqs = []
     for tensor in tensors:
         reqs.append(p2p_func(tensor, pp_rank, pp_group))
