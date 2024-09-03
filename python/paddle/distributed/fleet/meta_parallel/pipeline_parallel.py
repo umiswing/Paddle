@@ -16,6 +16,7 @@ import sys
 import time
 import warnings
 from collections import defaultdict
+from typing import Callable
 
 import paddle
 from paddle import framework
@@ -45,6 +46,10 @@ from paddle.distributed.fleet.utils.tensor_fusion_helper import (
     HOOK_ACTION,
     FusedCommBuffer,
     assign_group_by_size,
+)
+
+from .pipeline_hooks import (
+    BubbleHook,
 )
 
 __all__ = []
@@ -144,6 +149,16 @@ class FakeMicroDataset:
             "batch_size = %d, micro_batch_size = %d, accumulate_steps = %d."
             % (batch_size, self._micro_batch_size, self._acc_steps)
         )
+
+
+pipeline_bubble_hooks_ = BubbleHook()
+
+
+def register_bubble_pipeline_parallel_hook(location: int, hook: Callable):
+    """
+    Registering bubble hooks for pipeline parallelism.
+    """
+    pipeline_bubble_hooks_.register_hook(location, hook)
 
 
 class PipelineParallel(MetaParallelBase):
@@ -299,6 +314,10 @@ class PipelineParallel(MetaParallelBase):
         self.loss_fn_idx = 0
 
         self._compute_loss = True
+
+        self.bubble_hooks = pipeline_bubble_hooks_
+
+        self.bubble_hooks.set_bubble_times(bubble_times=self.num_stages)
 
         logger.info(
             f"Pipeline Info -- num_stages: {self.num_stages}, stage_id: {self.stage_id}"
@@ -799,7 +818,7 @@ class PipelineParallel(MetaParallelBase):
         return self.train_loss
 
     def _forward_step(self, input_tensor, micro_dataset, chunk_id=None):
-        sync_rotate_logger.info("Before forward_step")
+        sync_rotate_logger().info("Before forward_step")
         if self._enable_timer:
             self.timers("forward_step").start()
         if self.is_pipeline_first_stage():
@@ -847,7 +866,7 @@ class PipelineParallel(MetaParallelBase):
             self.micro_batch_id += 1
         if self._enable_timer:
             self.timers("forward_step").stop()
-        sync_rotate_logger.info("After forward_step")
+        sync_rotate_logger().info("After forward_step")
         if self.is_pipeline_last_stage() and self._compute_loss:
             return backward_loss_tensor
         return output_tensor
@@ -855,7 +874,7 @@ class PipelineParallel(MetaParallelBase):
     def _backward_step(self, input_tensor, output_tensor, output_tensor_grad):
         if self._enable_timer:
             self.timers("backward_step").start()
-        sync_rotate_logger.info("Before backward_step")
+        sync_rotate_logger().info("Before backward_step")
         with paddle.amp.auto_cast(enable=False):
             if self.is_pipeline_last_stage():
                 assert output_tensor_grad is None
@@ -888,7 +907,7 @@ class PipelineParallel(MetaParallelBase):
             if self._enable_timer:
                 self.timers("backward_step").stop()
 
-            sync_rotate_logger.info("After backward_step")
+            sync_rotate_logger().info("After backward_step")
             return input_tensor_grad
 
     def _check_micro_batch_data_valid(self, micro_batch_data):
@@ -1232,7 +1251,7 @@ class PipelineParallelWithInterleave(PipelineParallel):
         static_scheduler=False,
         return_micro_batch_loss=False,
     ):
-        sync_rotate_logger.info("start forward_backward_pipeline")
+        sync_rotate_logger().info("start forward_backward_pipeline")
         # use interleave scheduling strategy.
         # this strategy is inspired by:
         # https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/schedules.py
@@ -1334,6 +1353,13 @@ class PipelineParallelWithInterleave(PipelineParallel):
 
         steady_steps = num_steps - startup_steps
 
+        bubble_idx = -1
+        for location in range(self.stage_id):
+            bubble_idx += 1
+            self.bubble_hooks.run_hook(bubble_idx)
+
+        rest_bubble_times = self.num_stages - 1 - self.stage_id
+
         self.set_virtual_pipeline_rank(0)
         if not static_scheduler:
             self.input_tensors[0].append(
@@ -1370,6 +1396,10 @@ class PipelineParallelWithInterleave(PipelineParallel):
             self._record_stamp("F", micro_step, '"B"', forward=True)
             output_tensor = self._forward_step_helper(micro_dataset, micro_step)
             self._record_stamp("F", micro_step, '"E"', forward=True)
+
+            if micro_step >= startup_steps - rest_bubble_times:
+                bubble_idx += 1
+                self.bubble_hooks.run_hook(bubble_idx)
 
             # determine whether recv forward tensor or not
             next_virtual_pp_rank = self._get_virtual_pp_rank(
@@ -1718,6 +1748,14 @@ class PipelineParallelWithInterleave(PipelineParallel):
                         f"backward step for {real_micro_step} with virtual pp rank {virtual_pp_rank}"
                     )
                     continue
+
+                if (
+                    micro_step
+                    < steady_steps + self.num_stages - 1 - self.stage_id
+                ):
+                    bubble_idx += 1
+                    self.bubble_hooks.run_hook(bubble_idx)
+
                 # cooldown loop
                 self._record_stamp("B", micro_step, '"B"', forward=False)
                 input_tensor_grad = self._backward_step_helper(micro_step)
@@ -1752,6 +1790,15 @@ class PipelineParallelWithInterleave(PipelineParallel):
 
             self._sync_overlap_grads()
 
+            for _ in range(self.stage_id):
+                bubble_idx += 1
+                self.bubble_hooks.run_hook(bubble_idx)
+
+            if not forward_only:
+                assert (bubble_idx + 1) == (
+                    2 * self.num_stages - 2
+                ), f"All bubbles number {bubble_idx + 1} should be equal to {(2 * self.num_stages - 2)}"
+
             if static_scheduler:
                 self._reset_counter()
                 return schedule
@@ -1781,7 +1828,7 @@ class PipelineParallelWithInterleave(PipelineParallel):
             self._p2p_helper.clear_meta_cache()
 
         self.timer_printer()
-        sync_rotate_logger.info("end forward_backward_pipeline")
+        sync_rotate_logger().info("end forward_backward_pipeline")
 
         return train_loss
 
