@@ -169,6 +169,8 @@ limitations under the License. */
 #include "paddle/phi/kernels/autotune/switch_autotune.h"
 #include "pybind11/stl.h"
 
+#include "paddle/phi/backends/gpu/gpu_info.h"
+
 COMMON_DECLARE_bool(use_mkldnn);
 COMMON_DECLARE_bool(use_shm_cache);
 
@@ -833,7 +835,12 @@ void BindTensor(pybind11::module &m) {  // NOLINT
              // 2. Rebuild Allocation from handle
              const std::string &handle = t[0].cast<std::string>();
              ptrdiff_t offset_bytes = (ptrdiff_t)t[1].cast<int64_t>();
+             // TODO(umiswing): idk which device_id is more suitable to use,
+             // though both can work correctly since ptr is decoupled with 
+             // device_id, using different device_id view tensor from 
+             // different perspective.
              auto device_id = t[6].cast<int>();
+             // int device_id = platform::GetCurrentDeviceId();
              auto base_ptr = memory::allocation::GetIpcBasePtr(handle);
              size_t size = t[2].cast<size_t>();
              void *dev = base_ptr.get();
