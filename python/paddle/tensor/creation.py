@@ -852,6 +852,11 @@ def _to_tensor_static(
 
     return output
 
+def to_remote_tensor(
+    data: core.Tensor,
+) -> paddle.Tensor:
+    assert in_dynamic_mode(), f'only support remote tensor in dygraph'
+    return paddle.Tensor(data, place=data._place())
 
 def to_tensor(
     data: TensorLike | NestedNumbericSequence,
