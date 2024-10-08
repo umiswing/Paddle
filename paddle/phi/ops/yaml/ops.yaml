@@ -2273,6 +2273,19 @@
   backward : gelu_grad
   interfaces : paddle::dialect::InferSymbolicShapeInterface
 
+- op : gemm_rs
+  args: (Tensor input, Tensor weight, Tensor bias, Tensor input_scale, Tensor weight_scale, Tensor output_scale, Tensor[] output_buffers, Tensor[] reduce_buffers, Tensor[] barrier_buffers, Tensor[] sync_buffers, int nnodes, int max_m, int n_dim, bool transpose_weight, bool fuse_reduction)
+  # output : Tensor[](output_buffers){nnodes}, Tensor[](reduce_buffers){nnodes}, Tensor[](barrier_buffers){nnodes}, Tensor[](sync_buffers){nnodes}
+  output : Tensor(fake_output)
+  infer_meta :
+    func : GemmRSInferMeta
+    param: [input]
+  kernel :
+    func : gemm_rs
+    data_type : input
+  optional : bias, input_scale, weight_scale, output_scale
+  # interfaces : paddle::dialect::InferSymbolicShapeInterface
+
 - op : generate_proposals
   args : (Tensor scores, Tensor bbox_deltas, Tensor im_shape, Tensor anchors, Tensor variances, int pre_nms_top_n, int post_nms_top_n, float nms_thresh, float min_size, float eta, bool pixel_offset=true)
   output : Tensor(rpn_rois), Tensor(rpn_roi_probs), Tensor(rpn_rois_num)
