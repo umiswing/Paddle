@@ -202,6 +202,20 @@ phi::DeviceContext* ProcessGroupNCCL::GetDeviceContext(
   }
 }
 
+// umiswing: just hack
+// it's sooooo weird???
+phi::DeviceContext* ProcessGroupNCCL::GetGemmRSContext(const Place& place) {
+  const auto& key = GetKeyFromPlace(place);
+  std::string store_key;
+  GetStoreKey(key, CommType::GEMM_RS, &store_key);
+
+  if (place_to_comm_ctx_.find(key) == place_to_comm_ctx_.end()) {
+    CreateNCCLEnvCache(place, key, store_key, CommType::GEMM_RS);
+  }
+
+  return place_to_comm_ctx_.at(key).get();
+}
+
 ncclComm_t ProcessGroupNCCL::NCCLComm(const Place& place) const {
   const std::string& key = GetKeyFromPlace(place);
   const auto& iter = place_to_comm_ctx_.find(key);

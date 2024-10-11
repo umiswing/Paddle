@@ -2581,6 +2581,37 @@ void FusionGroupInferMeta(const std::vector<const MetaTensor*>& ins,
   }
 }
 
+#if 0
+void GemmRSInferMeta(const MetaTensor& input,
+                     const MetaTensor& weight,
+                     const MetaTensor& bias,
+                     const MetaTensor& input_scale,
+                     const MetaTensor& weight_scale,
+                     const MetaTensor& output_scale,
+                     std::vector<const MetaTensor*>& output_buffers,
+                     std::vector<const MetaTensor*>& reduce_buffers,
+                     std::vector<const MetaTensor*>& barrier_buffers,
+                     std::vector<const MetaTensor*>& sync_buffers,
+                     const int32_t nnodes,
+                     const int32_t max_m,
+                     const int32_t n_dim,
+                     bool transpose_weight,
+                     bool fuse_reduction,
+                     MetaTensor* fake_output) {
+}
+#endif
+void GemmRSInferMeta(const MetaTensor& input,
+                     const MetaTensor& weight,
+                     const MetaTensor& bias,
+                     const MetaTensor& input_scale,
+                     MetaTensor* fake_output) {
+
+    fake_output->set_dtype(input.dtype());
+
+    fake_output->set_dims(input.dims());
+}
+                     
+
 void GenerateProposalsV2InferMeta(const MetaTensor& scores,
                                   const MetaTensor& bbox_deltas,
                                   const MetaTensor& im_shape,

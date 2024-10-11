@@ -116,6 +116,12 @@ class ProcessGroup {
         GetBackendName()));
   }
 
+  virtual phi::DeviceContext* GetGemmRSContext(const Place& place UNUSED) {
+    PADDLE_THROW(common::errors::Unimplemented(
+        "ProcessGroup%s does not support get get_gemm_rs_context.",
+        GetBackendName()));
+  }
+
   virtual void StartCoalescing() {}
 
   virtual void EndCoalescing(

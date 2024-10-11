@@ -98,9 +98,11 @@ enum class CommType : std::uint8_t {
   SEND = 9,
   RECV = 10,
   BARRIER = 11,
+  GEMM_RS = 12, // umiswing: hack here to support flux
   UNKNOWN = 100,
 };
 
+// umiswing: according to usage in process_group_nccl.h, GEMM_RS should not be p2p op
 inline bool IsP2POP(CommType comm_type, bool is_batch_p2p = false) {
   if (is_batch_p2p) {
     return false;

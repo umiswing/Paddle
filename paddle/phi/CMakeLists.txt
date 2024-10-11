@@ -51,6 +51,7 @@ set(PHI_DEPS
     cblas
     utf8proc
     common)
+    # process_group_nccl) # umiswing: hack here to fix build deps, must remove later
 
 set(INFERENCE_DEPS phi_profiler_proto auto_parallel_proto)
 
@@ -186,6 +187,10 @@ endif()
 file(WRITE ${PHI_DUMMY_FILE} ${PHI_DUMMY_FILE_CONTENT})
 
 add_library(phi ${PHI_BUILD_TYPE} ${PHI_DUMMY_FILE})
+# target_include_directories(phi PRIVATE "kernels/fusion/flux/include")
+# target_include_directories(phi_core PRIVATE "kernels/fusion/flux/include")
+# target_include_directories(phi_gpu PRIVATE "kernels/fusion/flux/include" "kernels/fusion/flux/3rdparty/cutlass/include")
+target_include_directories(phi_gpu PRIVATE "kernels/gpu/flux/src" "kernels/gpu/flux/include" "kernels/gpu/flux/3rdparty/cutlass/include")
 target_link_libraries(phi phi_core)
 if(WITH_GPU OR WITH_ROCM)
   target_link_libraries(phi phi_gpu)
