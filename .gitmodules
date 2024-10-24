@@ -125,6 +125,6 @@
 [submodule "third_party/yaml-cpp"]
 	path = third_party/yaml-cpp
 	url = https://github.com/jbeder/yaml-cpp
-[submodule "paddle/fluid/operators/flux"]
-	path = paddle/fluid/operators/flux
-	url = https://github.com/umiswing/flux.git
+# [submodule "paddle/fluid/operators/flux"]
+# 	path = paddle/fluid/operators/flux
+# 	url = https://github.com/umiswing/flux.git
