@@ -126,5 +126,5 @@
 	path = third_party/yaml-cpp
 	url = https://github.com/jbeder/yaml-cpp
 [submodule "paddle/phi/kernels/gpu/flux"]
-	path = paddle/phi/kernels/gpu/flux
+	path = paddle/fluid/operators/flux/
 	url = https://github.com/umiswing/flux.git
