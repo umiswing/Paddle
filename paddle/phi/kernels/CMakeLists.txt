@@ -36,74 +36,13 @@ file(
   "selected_rows/gpu/*.cu"
   "sparse/gpu/*.cu"
   "strings/gpu/*.cu"
-  # "fusion/fp8_gemm/fp8_gemm_with_cublasLt/*.cu"
-  # "fusion/gpu/*.cu")
-  )
-  #"gpu/flux/*.cu")
+  "fusion/fp8_gemm/fp8_gemm_with_cublasLt/*.cu"
+  "fusion/gpu/*.cu")
 
-# umiswing: i want to use GLOB_RECURSE but... idk why develop not using it.
 file(
   GLOB kernel_gpu
   RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
   "gpu/*.cu" "gpu/*.cu.cc")
-  # "gpu/*.cu" "gpu/*.cu.cc" "gpu/flux/*.cu" "gpu/flux/src/cuda/*.cu" "gpu/flux/")
-
-set(GEMM_OP_REG_INP_FILE ${CMAKE_CURRENT_SOURCE_DIR}/gpu/flux/src/cuda/gemm_op_registry.cu.in)
-message("GEMM_OP_REG_INP_FILE ${GEMM_OP_REG_INP_FILE}")
-# /workspace/Paddle-ipc/paddle/phi/kernels/gpu/flux/src/cuda/gemm_op_registry.cu.in
-
-# Generated op reg files and append to `GENERATED` file list                                                                            
-function(flux_add_gemm_op_reg IMPL_HEADER IMPL_NAME NSPLITS GENERATED)                                                                  
-  # set(GENERATED_REG_DIR "${CMAKE_CURRENT_BINARY_DIR}")                                                                                  
-  set(GENERATED_REG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/gpu/flux/src/generated/")                                                                                  
-  set(CUDAARCHS "90" CACHE STRING "CUDA Architectures")
-
-  message("GENERATED_REG_DIR ${GENERATED_REG_DIR}")
-                                                                                                                                        
-  set(GENERATED_FILES "${${GENERATED}}")                                                                                                
-  math(EXPR max_value "${NSPLITS} - 1")                                                                                                 
-  foreach(SPLIT_IDX RANGE 0 ${max_value})                                                                                               
-    foreach(ARCH ${CUDAARCHS})                                                                                                          
-      set(OUTPUT_FILE "${GENERATED_REG_DIR}/${IMPL_NAME}_sm${ARCH}_${SPLIT_IDX}_${NSPLITS}.cu")                                         
-      # set(OUTPUT_FILE "${GENERATED_REG_DIR}/${IMPL_NAME}_sm80_${SPLIT_IDX}_${NSPLITS}.cu")                                         
-      # set(OUTPUT_FILE "${GENERATED_REG_DIR}/flux/src/${IMPL_NAME}_sm80_${SPLIT_IDX}_${NSPLITS}.cu")                                         
-      configure_file(${GEMM_OP_REG_INP_FILE} ${OUTPUT_FILE} @ONLY)                                                                      
-      list(APPEND GENERATED_FILES ${OUTPUT_FILE})                                                                                       
-    endforeach()                                                                                                                        
-  endforeach()                                                                                                                          
-  set(${GENERATED} ${GENERATED_FILES} PARENT_SCOPE)                                                                                     
-endfunction()
-
-set(OP_REGS "")
-
-flux_add_gemm_op_reg("reduce_scatter/gemm_v2_reduce_scatter.hpp" "GemmV2ReduceScatter" 16 "OP_REGS")
-flux_add_gemm_op_reg("reduce_scatter/gemm_v3_reduce_scatter.hpp" "GemmV3ReduceScatter" 16 "OP_REGS")
-
-file(
-  GLOB flux_src
-  RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
-  "gpu/flux/*.cu"
-  "gpu/flux/src/cuda/op_registry.cu"
-  "gpu/flux/src/cuda/cuda_common.cc"
-  "gpu/flux/src/ths_op/ths_op.cc"
-  "gpu/flux/src/cuda/utils.cc"
-  "gpu/flux/src/ths_op/flux_shm.cc"
-  "gpu/flux/src/cuda/nvml_stub.cc"
-  "gpu/flux/src/cuda/cudaipc_barrier_all.cu"
-  "gpu/flux/src/cuda/op_registry.cu"
-  "gpu/flux/src/cuda/op_registry_proto_utils.cc"
-  "gpu/flux/src/reduce_scatter/tuning_config/*.cu"
-  ${OP_REGS}
-  # "gpu/flux/src/cuda/*.cu"
-  # "gpu/flux/src/cuda/cuda_common.cc"
-  # "gpu/flux/src/cuda/cuda_common.cc"
-  )
-
-list(REMOVE_ITEM flux_src "gpu/flux/src/reduce_scatter/ths_op/gemm_reduce_scatter.cc" "gpu/flux/3rdparty/nccl/*")
-
-# list(APPEND flux_src ${OP_REGS})
-
-list(APPEND kernel_gpu ${flux_src})
 
 if(APPLE OR WIN32)
   list(REMOVE_ITEM kernel_cu "fusion/gpu/fusion_group_kernel.cu")
@@ -113,7 +52,6 @@ endif()
 if(NOT WITH_DGC)
   list(REMOVE_ITEM kernel_gpu "gpu/dgc_kernel.cu")
 endif()
-list(REMOVE_ITEM kernel_gpu "gpu/weight_only_linear_kernel.cu" "gpu/weight_dequantize_kernel.cu" "gpu/weight_only_linear_grad_kernel.cu")
 
 if(WITH_CUTLASS)
   add_custom_target(
@@ -258,7 +196,7 @@ if(WITH_CUTLASS)
     "fusion/cutlass/cutlass_kernels/fpA_intB_gemm/*.cu"
     "fusion/cutlass/cutlass_kernels/moe_gemm/*.cu")
 
-  # list(APPEND kernel_cu ${cutlass_cu})
+  list(APPEND kernel_cu ${cutlass_cu})
 endif()
 
 if(NOT WITH_CUDNN_FRONTEND)

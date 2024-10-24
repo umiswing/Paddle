@@ -31,6 +31,8 @@ add_subdirectory(tools)
 if(WITH_CUSTOM_DEVICE)
   add_subdirectory(capi)
 endif()
+#flux
+# add_subdirectory(kernels/gpu/flux)
 
 if(WIN32)
   file(GLOB_RECURSE YAML_FILE "${CMAKE_CURRENT_SOURCE_DIR}/ops/yaml/*.yaml")
@@ -51,7 +53,6 @@ set(PHI_DEPS
     cblas
     utf8proc
     common)
-    # process_group_nccl) # umiswing: hack here to fix build deps, must remove later
 
 set(INFERENCE_DEPS phi_profiler_proto auto_parallel_proto)
 
@@ -187,10 +188,6 @@ endif()
 file(WRITE ${PHI_DUMMY_FILE} ${PHI_DUMMY_FILE_CONTENT})
 
 add_library(phi ${PHI_BUILD_TYPE} ${PHI_DUMMY_FILE})
-# target_include_directories(phi PRIVATE "kernels/fusion/flux/include")
-# target_include_directories(phi_core PRIVATE "kernels/fusion/flux/include")
-# target_include_directories(phi_gpu PRIVATE "kernels/fusion/flux/include" "kernels/fusion/flux/3rdparty/cutlass/include")
-target_include_directories(phi_gpu PRIVATE "kernels/gpu/flux/src" "kernels/gpu/flux/include" "kernels/gpu/flux/3rdparty/cutlass/include")
 target_link_libraries(phi phi_core)
 if(WITH_GPU OR WITH_ROCM)
   target_link_libraries(phi phi_gpu)
@@ -278,6 +275,9 @@ endif()
 if(WITH_FLASHATTN)
   add_dependencies(phi flashattn)
 endif()
+
+## add_dependencies(phi flux)
+# target_link_libraries(phi flux)
 
 # for inference static library
 if(NOT WITH_SHARED_PHI)
