@@ -23,7 +23,7 @@ get_ring_mode(AGRingMode ring_mode) {
 
 template<typename BufferT>
 class BuffersHolder {
-private:
+public:
   const GPUContext& dev_ctx;
   paddle::distributed::ProcessGroup* tp_group;
   size_t world_size;
@@ -31,6 +31,8 @@ private:
   size_t size_in_bytes;
   void * ptr;
   phi::DataType dtype;
+  DenseTensor local_buffer;
+  int64_t numel;
 public:
 
 #if 0
@@ -58,6 +60,7 @@ public:
     else throw std::runtime_error("cudaipc_create_tensor_list unexpected BufferT");
 
     this->size_in_bytes = calc_size(shape);
+    this->numel = calc_numel(shape);
     alloc();
   }
 
@@ -67,17 +70,13 @@ public:
     reserve(shape);
     std::vector<DenseTensor> tensors;
     for (int i = 0; i < tp_group->GetSize(); ++i) {
-      if (i == tp_group->GetRank()) {
-        DenseTensor local_tensor;
-        local_tensor =
-            // from_blob(ptrs[i], shape, dtype, dev_ctx.GetPlace(), [](phi::Allocation* allocation) { cudaFree(allocation->ptr()); });
-            from_blob(ptrs[i], shape, dtype, dev_ctx.GetPlace(), [](phi::Allocation* allocation) { });
-        tensors.emplace_back(local_tensor);
+      if (false && i == tp_group->GetRank()) {
+        tensors.emplace_back(this->local_buffer);
       } else {
         DenseTensor tensor;
         tensor =
             // from_blob(ptrs[i], shape, dtype, dev_ctx.GetPlace(), [](phi::Allocation* allocation) { cudaIpcCloseMemHandle(allocation->ptr()); });
-            from_blob(ptrs[i], shape, dtype, dev_ctx.GetPlace(), [](phi::Allocation* allocation) { });
+            from_blob(ptrs[i], shape, dtype, dev_ctx.GetPlace(), [](phi::Allocation* allocation) {});
         tensors.emplace_back(tensor);
       }
     }
@@ -86,10 +85,42 @@ public:
 
   }
 
+  void print_ptrs(const std::string& s) {
+    BufferT x;
+
+    std::cout << "\nprint_ptrs: " << s << "\n" << std::endl;
+
+    bool all_zero = true;
+
+    for(auto& d_ptr : ptrs) {
+      for(int i=0;i<this->numel;i++) {
+        cudaMemcpy(&x,static_cast<BufferT*>(d_ptr)+i,sizeof(BufferT),cudaMemcpyDeviceToHost);
+        if(x!=static_cast<BufferT>(0)) {
+          all_zero = false;
+          std::cout << " ," << x;
+        }
+      }
+    }
+    if(all_zero) {
+      std::cout << "all zero!";
+    }
+    std::cout << std::endl;
+
+  }
+
 private:
   void alloc() {
+#if 0
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMalloc(&ptr, size_in_bytes));
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemset(ptr, 0, size_in_bytes));
+#endif
+    this->local_buffer = phi::Empty<BufferT>(dev_ctx, {this->numel});
+    phi::funcs::SetConstant<GPUContext, BufferT> set_zero;
+    set_zero(this->dev_ctx, &(this->local_buffer), static_cast<BufferT>(0));
+    ptr = this->local_buffer.data();
+#if 0
+    PADDLE_ENFORCE_GPU_SUCCESS(cudaMemset(ptr, 0, this->local_buffer.numel()));
+#endif
 
     cudaIpcMemHandle_t handle;
     PADDLE_ENFORCE_GPU_SUCCESS(cudaIpcGetMemHandle(&handle, ptr));
@@ -122,8 +153,12 @@ private:
     this->tp_group->Barrier(opts)->Wait();
   }
 
+  int64_t calc_numel(const std::vector<int64_t>& shape) {
+    return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>());
+  }
+
   size_t calc_size(const std::vector<int64_t>& shape) {
-    return sizeof(BufferT) * std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>());
+    return sizeof(BufferT) * this->calc_numel(shape);
   }
 
   void release() {
@@ -136,13 +171,14 @@ private:
     distributed::BarrierOptions opts{};
     opts.device_id = device_id;
     this->tp_group->Barrier(opts)->Wait();
-    cudaFree(this->ptr);
+    // cudaFree(this->ptr);
   }
 
   void reserve(const std::vector<int64_t>& shape) {
     size_t require_size = calc_size(shape);
     if(require_size > this->size_in_bytes) {
       this->size_in_bytes = require_size;
+      this->numel = this->calc_numel(shape);
       release();
       alloc();
     }
@@ -167,9 +203,8 @@ private:
         dev_ctx.GetPlace().GetType() == phi::AllocationType::GPU,
         "gemm_rs not on GPU");
   #endif
-  
-    auto meta =
-        phi::DenseTensorMeta(dtype, common::make_ddim(shape), layout);
+
+    auto meta = this->local_buffer.meta();
   
     size_t size = SizeOf(dtype) * (meta.is_scalar ? 1 : product(meta.dims));
   

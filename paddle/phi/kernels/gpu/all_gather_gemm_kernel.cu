@@ -17,6 +17,59 @@
 
 namespace phi {
 
+template<typename BufferT>
+void print_address(std::vector<DenseTensor>&sync_buffers, std::vector<int32_t*>&sync_buffer_ptrs,
+                   BuffersHolder<BufferT> holder, int32_t rank) {
+  std::cout << "\nprint_address" << std::endl;
+  std::cout << sync_buffers[rank].data() << " ,"
+            << sync_buffer_ptrs[rank] << " ,"
+            << holder.ptr << " ,"
+            << holder.local_buffer.data() << " ,"
+            << holder.ptrs[rank] << std::endl;
+
+  std::cout << "\nprint sync_buffer_ptrs" << std::endl;
+  for(auto& d_ptr : sync_buffer_ptrs) {
+    std::cout << d_ptr << " ,";
+  }
+  std::cout << std::endl;
+}
+
+template<typename BufferT>
+void write_ptrs(std::vector<DenseTensor>& buffers, const phi::GPUContext& dev_ctx) {
+  phi::funcs::SetConstant<GPUContext, BufferT> set_func;
+
+  for(auto& x : buffers) {
+    set_func(dev_ctx, &(x), static_cast<BufferT>(67));
+  }
+
+}
+
+template<typename BufferT>
+void print_ptrs(const std::string& s, std::vector<BufferT*>& ptrs, int64_t numel) {
+  BufferT x;
+
+  std::cout << "\nprint_ptrs: " << s << "\n" << std::endl;
+
+  bool all_zero = true;
+
+  for(auto& d_ptr : ptrs) {
+    for(int i=0;i<numel;i++) {
+      cudaMemcpy(&x,static_cast<BufferT*>(d_ptr)+i,sizeof(BufferT),cudaMemcpyDeviceToHost);
+      // if(x!=static_cast<BufferT>(0)) {
+      //  all_zero = false;
+        std::cout << " ," << x;
+      // }
+    }
+  }
+#if 0
+  if(all_zero) {
+    std::cout << "all zero!";
+  }
+#endif
+  std::cout << std::endl;
+
+}
+
 template<typename InT, typename OutT>
 class AGGemmHelper {
 public:
@@ -144,6 +197,7 @@ int32_t local_rank;
     int num_signals = MAX_NUM_SIGNAL;
     static BuffersHolder<int32_t> barrier_buffers_holder{{num_signals}, dev_ctx, tp_group};
     this->barrier_buffers = barrier_buffers_holder.get_buffers({num_signals});
+    barrier_buffers_holder.print_ptrs({"barrier_buffers"});
     // this->barrier_buffers = cudaipc_create_tensor_list<int32_t>({num_signals});
     this->barrier_buffer = this->barrier_buffers[this->local_rank];
     for (int i = 0; i < world_size; ++i) {
@@ -186,6 +240,7 @@ int32_t local_rank;
 #ifndef FLUX_SHM_USE_NVSHMEM
     static BuffersHolder<int32_t> sync_buffers_holder{{this->world_size}, dev_ctx, tp_group};
     this->sync_buffers = sync_buffers_holder.get_buffers({this->world_size});
+    sync_buffers_holder.print_ptrs({"sync_buffers"});
     // this->sync_buffers =
     //     cudaipc_create_tensor_list<int32_t>({this->world_size});
     phi::funcs::SetConstant<GPUContext, int32_t> set_functor;
@@ -195,6 +250,7 @@ int32_t local_rank;
     for(size_t i=0;i<this->sync_buffers.size();i++) {
       this->sync_buffer_ptrs[i] = static_cast<int32_t *>(this->sync_buffers[i].data());
     }
+    print_address(this->sync_buffers, this->sync_buffer_ptrs, sync_buffers_holder, this->rank);
 #endif
   }
 
@@ -478,6 +534,7 @@ void AllGatherGemmKernel(const Context& dev_ctx,
   cudaStream_t current_stream = dev_ctx.stream();
 
   if (!local_copy) {
+    print_ptrs<int32_t>({"sync_buffer_ptrs.data()"}, helper.sync_buffer_ptrs, helper.world_size);
     // copy_local
     helper.chunk_size = input.numel() * SizeOf(input.dtype());
     helper.split_chunk_size = helper.chunk_size / SPLIT;
@@ -491,15 +548,30 @@ void AllGatherGemmKernel(const Context& dev_ctx,
         cudaMemcpyDefault,
         current_stream));
 
+  if(helper.rank == 1) {
+    write_ptrs<int32_t>(helper.sync_buffers, dev_ctx);
+  }
+
+  int64_t device_id = dev_ctx.GetPlace().GetDeviceId();
+  distributed::BarrierOptions opts{};
+  opts.device_id = device_id;
+  pg->Barrier(opts)->Wait();
+
+  cudaDeviceSynchronize();
+
+  print_ptrs<int32_t>({"sync_buffer_ptrs.data()"}, helper.sync_buffer_ptrs, helper.world_size);
     for (int j = 0; j < SPLIT; ++j) {
       phi::dynload::set_ready(helper.barrier_ptrs[helper.rank], helper.rank, j, dev_ctx.stream());
     }
+  print_ptrs<int32_t>({"sync_buffer_ptrs.data()"}, helper.sync_buffer_ptrs, helper.world_size);
     phi::dynload::cudaipc_barrier_all_on_stream_impl_capi(
         current_stream,
         helper.sync_buffer_ptrs.data(),
         helper.rank,
         helper.world_size);
   }
+
+  print_ptrs<int32_t>({"sync_buffer_ptrs.data()"}, helper.sync_buffer_ptrs, helper.world_size);
 
 
   PADDLE_ENFORCE_GPU_SUCCESS(cudaEventRecord(helper.ready_event, current_stream));
