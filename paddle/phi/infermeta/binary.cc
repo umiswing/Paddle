@@ -3452,6 +3452,30 @@ void ReduceAsInferMeta(const MetaTensor& x,
   out->set_layout(x.layout());
 }
 
+void SMPColRowRowLinearGradInferMeta(const MetaTensor& x,
+                                     const MetaTensor& weight,
+                                     MetaTensor* dw,
+                                     MetaTensor* dx) {
+  PADDLE_ENFORCE_EQ(
+      x.dims().size(),
+      2,
+      phi::errors::InvalidArgument(
+          "x should be 2-D tensor. But received x dims: [%s].", x.dims()));
+
+  PADDLE_ENFORCE_EQ(
+      weight.dims().size(),
+      2,
+      phi::errors::InvalidArgument(
+          "weight should be 2-D tensor. But received weight dims: [%s].",
+          weight.dims()));
+
+  dw->set_dims(weight.dims());
+  dw->set_dtype(weight.dtype());
+
+  dx->set_dims(x.dims());
+  dx->set_dtype(x.dtype());
+}
+
 void SoftmaxMaskFuseInferMeta(const MetaTensor& x,
                               const MetaTensor& mask,
                               MetaTensor* out) {

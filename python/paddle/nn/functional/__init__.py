@@ -158,6 +158,7 @@ from .pooling import (
     max_unpool3d,
 )
 from .sparse_attention import sparse_attention
+from .submatrix_parallel import smp_col_row_row_linear_grad
 from .vision import (
     affine_grid,
     channel_shuffle,
@@ -296,4 +297,5 @@ __all__ = [
     'group_norm',
     'all_gather_gemm',
     'gemm_reduce_scatter',
+    'smp_col_row_row_linear_grad',
 ]

@@ -12,17 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "paddle/phi/backends/dynload/cuda_driver.h"
+
 #pragma once
 
 namespace phi {
+
+inline void* ptr_offset(void* ptr, ptrdiff_t offset) {
+  return static_cast<char*>(ptr) + offset;
+}
 
 // Integration of Flux, a gemm-comm-overlap library as described in the paper
 // https://arxiv.org/pdf/2406.06858
 
 #ifdef PADDLE_WITH_FLUX
-inline void* ptr_offset(void* ptr, ptrdiff_t offset) {
-  return static_cast<char*>(ptr) + offset;
-}
 
 // All2All for nvlink mode. for NVLINK machine, default is 0
 // Ring1D for 1d-ring. for PCI-e machine without GPUs cross NUMA nodes use ring

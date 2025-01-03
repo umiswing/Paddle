@@ -30,7 +30,7 @@
 
 #include "paddle/phi/core/distributed/nccl_comm_context.h"
 #include "paddle/phi/core/distributed/utils.h"
-#include "paddle/phi/kernels/gpu/flux_utils.h"
+#include "paddle/phi/kernels/gpu/comm_overlap_utils.h"
 
 namespace phi {
 

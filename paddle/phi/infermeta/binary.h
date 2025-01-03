@@ -611,6 +611,11 @@ void ReduceAsInferMeta(const MetaTensor& x,
                        const MetaTensor& target,
                        MetaTensor* out);
 
+void SMPColRowRowLinearGradInferMeta(const MetaTensor& x,
+                                     const MetaTensor& weight,
+                                     MetaTensor* dw,
+                                     MetaTensor* dx);
+
 void SoftmaxMaskFuseInferMeta(const MetaTensor& x,
                               const MetaTensor& mask,
                               MetaTensor* out);
