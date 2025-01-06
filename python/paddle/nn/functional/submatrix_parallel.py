@@ -15,6 +15,16 @@
 from paddle import _C_ops
 
 
+def smp_col_row_row_linear(
+    x, weight, group, bias=None, transpose_weight=False, low_memory=False
+):
+    ring_id = group.id
+
+    return _C_ops.smp_col_row_row_linear(
+        x, weight, bias, transpose_weight, low_memory, ring_id
+    )
+
+
 def smp_col_row_row_linear_grad(
     dy, x, weight, group, bias=None, low_memory=True
 ):

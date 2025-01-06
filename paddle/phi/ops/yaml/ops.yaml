@@ -3990,6 +3990,17 @@
     func : slogdet
   backward : slogdet_grad
 
+- op : smp_col_row_row_linear
+  args : (Tensor x, Tensor weight, Tensor bias, bool transpose_weight, bool low_memory, int ring_id)
+  output : Tensor(output)
+  infer_meta :
+    func : SMPColRowRowLinearInferMeta
+    param : [x, weight]
+  kernel :
+    func : smp_col_row_row_linear
+    data_type : x
+  optional : bias
+
 - op : smp_col_row_row_linear_grad
   args : (Tensor dy, Tensor x, Tensor weight, Tensor bias, bool low_memory, int ring_id)
   output : Tensor(dw), Tensor(dx)

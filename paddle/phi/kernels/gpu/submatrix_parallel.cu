@@ -37,6 +37,145 @@
 namespace phi {
 
 // SMPColRowRow means x split in col, w split in row, o split in row
+// transpose_weight means weight with shape [n, k]
+template <typename T, typename Context>
+void SMPColRowRowLinear(const Context& dev_ctx,
+                        const DenseTensor& x,
+                        const DenseTensor& weight,
+                        const paddle::optional<DenseTensor>& bias,
+                        const bool transpose_weight,
+                        const bool low_memory,
+                        const int32_t ring_id,
+                        DenseTensor* output) {
+  VLOG(10) << "SMPColRowRowLinear";
+  PADDLE_ENFORCE(x.dims().size() == 2, "x must be 2-D tensor");
+  PADDLE_ENFORCE(weight.dims().size() == 2, "weight must be 2-D tensor");
+  // get ProcessGroup and NCCLCommContext
+  auto map = paddle::distributed::ProcessGroupMapFromGid::getInstance();
+
+  paddle::distributed::ProcessGroup* pg = map->get(ring_id);
+
+  PADDLE_ENFORCE_NE(
+      pg, nullptr, common::errors::Unavailable("ProcessGroup is nullptr."));
+
+  distributed::NCCLCommContext* comm_ctx =
+      pg->GetOrCreateCommContext(x.place(), distributed::CommType::ALLGATHER);
+
+  PADDLE_ENFORCE_NE(
+      comm_ctx, nullptr, common::errors::Unavailable("comm_ctx is nullptr."));
+
+  int32_t rank = pg->GetRank();
+  int32_t world_size = pg->GetSize();
+
+  // init workspace (tmp output)
+  int64_t global_m = x.dims()[0];
+  int64_t global_n = transpose_weight ? weight.dims()[0] : weight.dims()[1];
+  PADDLE_ENFORCE(global_m % world_size == 0,
+                 "m needs to be divisible by world size");
+  std::vector<DenseTensor> tmp_outputs(2);
+  for (int i = 0; i < 2; i++) {
+    tmp_outputs[i].Resize(common::make_dim(global_m / world_size, global_n));
+    dev_ctx.template Alloc<T>(&(tmp_outputs[i]));
+  }
+
+  size_t workspace_size_in_bytes = tmp_outputs[0].numel() * sizeof(T);
+
+  // init comm buffers
+  std::vector<int64_t> comm_buffer_shape{global_m / world_size, global_n};
+  // std::vector<int64_t> comm_buffer_shape{global_m, global_n};
+  static BuffersHolder<T> comm_buffers_holder{comm_buffer_shape, dev_ctx, pg};
+  std::vector<DenseTensor> comm_buffers =
+      comm_buffers_holder.get_buffers(comm_buffer_shape);
+
+  // init barrier
+  static BuffersHolder<int32_t> send_barrier_buffers_holder{
+      {world_size}, dev_ctx, pg};
+  std::vector<DenseTensor> send_barrier_buffers =
+      send_barrier_buffers_holder.get_buffers({world_size});
+
+  static BuffersHolder<int32_t> recv_barrier_buffers_holder{
+      {world_size}, dev_ctx, pg};
+  std::vector<DenseTensor> recv_barrier_buffers =
+      recv_barrier_buffers_holder.get_buffers({world_size});
+
+  static BuffersHolder<int32_t> gemm_barrier_buffers_holder{{2}, dev_ctx, pg};
+  std::vector<DenseTensor> gemm_barrier_buffers =
+      gemm_barrier_buffers_holder.get_buffers({2});
+
+  // init sync
+  static BuffersHolder<int32_t> sync_buffers_holder{{world_size}, dev_ctx, pg};
+  std::vector<DenseTensor> sync_buffers =
+      sync_buffers_holder.get_buffers({world_size});
+  std::vector<int32_t*> sync_buffer_ptrs(world_size, nullptr);
+
+  for (size_t i = 0; i < sync_buffers.size(); i++) {
+    sync_buffer_ptrs[i] = static_cast<int32_t*>(sync_buffers[i].data());
+  }
+
+  // push-based comm gemm overlap
+  DenseTensor sub_x;
+  int workspace_idx = 0;
+  for (int i = rank + world_size - 1; i >= rank; --i) {
+    int id = i % world_size;
+    // gemm
+    if (!(i == rank + world_size - 1 || i == rank + world_size - 2)) {
+      phi::smp::wait_empty(
+          gemm_barrier_buffers[rank].data(), workspace_idx, dev_ctx.stream());
+    }
+    phi::smp::get_submatrix<T>(dev_ctx, x, world_size, id, &sub_x);
+    phi::MatmulKernel<T>(dev_ctx,
+                         sub_x,
+                         weight,
+                         false,
+                         transpose_weight,
+                         &tmp_outputs[workspace_idx]);
+    if (i != rank + world_size - 1) {
+      phi::smp::wait_full_reset(
+          recv_barrier_buffers[rank].data(), id, dev_ctx.stream());
+      phi::AddKernel<T>(dev_ctx,
+                        tmp_outputs[workspace_idx],
+                        comm_buffers[rank],
+                        &tmp_outputs[workspace_idx]);
+    }
+    if (i != rank) {
+      phi::smp::set_full(
+          send_barrier_buffers[(rank + world_size - 1) % world_size].data(),
+          (i + world_size - 1) % world_size,
+          dev_ctx.stream());
+      phi::smp::set_full(
+          gemm_barrier_buffers[rank].data(), workspace_idx, dev_ctx.stream());
+    }
+
+    // comm
+    if (i != rank) {
+      phi::smp::wait_full(gemm_barrier_buffers[rank].data(),
+                          workspace_idx,
+                          comm_ctx->GetStream());
+      phi::smp::wait_full_reset(
+          send_barrier_buffers[rank].data(), id, comm_ctx->GetStream());
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          cudaMemcpyAsync(comm_buffers[(rank + 1) % world_size].data(),
+                          tmp_outputs[workspace_idx].data(),
+                          workspace_size_in_bytes,
+                          cudaMemcpyDefault,
+                          comm_ctx->GetStream()));
+      phi::smp::set_empty(gemm_barrier_buffers[rank].data(),
+                          workspace_idx,
+                          comm_ctx->GetStream());
+      phi::smp::set_full(recv_barrier_buffers[(rank + 1) % world_size].data(),
+                         id,
+                         comm_ctx->GetStream());
+      workspace_idx ^= 1;
+    }
+  }
+
+  *output = tmp_outputs[workspace_idx];
+
+  // reset signals
+  phi::smp::cudaipc_barrier_all_on_stream_impl(
+      dev_ctx.stream(), sync_buffer_ptrs.data(), rank, world_size);
+}
+
 template <typename T, typename Context>
 void SMPColRowRowLinearGrad(const Context& dev_ctx,
                             const DenseTensor& dy,
@@ -47,6 +186,7 @@ void SMPColRowRowLinearGrad(const Context& dev_ctx,
                             const int32_t ring_id,
                             DenseTensor* dw,
                             DenseTensor* dx) {
+  VLOG(10) << "SMPColRowRowLinearGrad";
   // get ProcessGroup and NCCLCommContext
   auto map = paddle::distributed::ProcessGroupMapFromGid::getInstance();
 
@@ -57,6 +197,8 @@ void SMPColRowRowLinearGrad(const Context& dev_ctx,
 
   distributed::NCCLCommContext* comm_ctx =
       pg->GetOrCreateCommContext(dy.place(), distributed::CommType::ALLGATHER);
+
+  PADDLE_ENFORCE_NE(dx, nullptr, common::errors::Unavailable("dx is nullptr."));
 
   PADDLE_ENFORCE_NE(
       comm_ctx, nullptr, common::errors::Unavailable("comm_ctx is nullptr."));
@@ -160,7 +302,9 @@ void SMPColRowRowLinearGrad(const Context& dev_ctx,
   }
 
   // calc dw
-  *dw = phi::Matmul<T>(dev_ctx, x, comm_buffers[rank], true, false);
+  if (dw != nullptr) {
+    *dw = phi::Matmul<T>(dev_ctx, x, comm_buffers[rank], true, false);
+  }
 
   /// reset signals
   phi::smp::cudaipc_barrier_all_on_stream_impl(
@@ -171,6 +315,13 @@ void SMPColRowRowLinearGrad(const Context& dev_ctx,
 }
 
 }  // namespace phi
+
+PD_REGISTER_KERNEL(smp_col_row_row_linear,
+                   GPU,
+                   ALL_LAYOUT,
+                   phi::SMPColRowRowLinear,
+                   phi::dtype::float16,
+                   phi::dtype::bfloat16) {}
 
 PD_REGISTER_KERNEL(smp_col_row_row_linear_grad,
                    GPU,

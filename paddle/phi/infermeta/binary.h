@@ -611,6 +611,10 @@ void ReduceAsInferMeta(const MetaTensor& x,
                        const MetaTensor& target,
                        MetaTensor* out);
 
+void SMPColRowRowLinearInferMeta(const MetaTensor& x,
+                                 const MetaTensor& weight,
+                                 MetaTensor* output);
+
 void SMPColRowRowLinearGradInferMeta(const MetaTensor& x,
                                      const MetaTensor& weight,
                                      MetaTensor* dw,

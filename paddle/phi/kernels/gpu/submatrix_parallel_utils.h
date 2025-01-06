@@ -88,7 +88,6 @@ __forceinline__ __global__ static void wait_eq(void* barrier_ptr,
     }
     __syncthreads();
     // // clang-format on
-    // Sync::sync();
   }
 
 void wait_full(void* barrier_ptr, int32_t barrier_idx, cudaStream_t stream) {
@@ -119,39 +118,62 @@ void set_empty(void* barrier_ptr, int32_t barrier_idx, cudaStream_t stream) {
   set_val(barrier_ptr, barrier_idx, 0, stream);
 }
 
+__forceinline__ __global__ static void wait_eq_reset(void* barrier_ptr,
+                                                     int32_t barrier_idx,
+                                                     int32_t val,
+                                                     int reset_val) {
+  int *flag_ptr = static_cast<int32_t *>(barrier_ptr) + barrier_idx;
+  // clang-format off
+  if (threadIdx.x == 0) {
+    #pragma unroll 1
+    while(atomicCAS(flag_ptr, val, reset_val) != val) {}
+  }
+  // clang-format on
+  __syncthreads();
+}
+
+void wait_full_reset(void* barrier_ptr,
+                     int32_t barrier_idx,
+                     cudaStream_t stream) {
+  wait_eq_reset<<<1, 32, 0, stream>>>(barrier_ptr, barrier_idx, 1, 0);
+}
+
+void wait_empty_reset(void* barrier_ptr,
+                      int32_t barrier_idx,
+                      cudaStream_t stream) {
+  wait_eq_reset<<<1, 32, 0, stream>>>(barrier_ptr, barrier_idx, 0, 1);
+}
+
 constexpr int32_t kMaxWorldSize = 32;
 
 struct CudaIpcBarrierAllArgs {
-  int32_t *sync_buffers[kMaxWorldSize];
+  int32_t* sync_buffers[kMaxWorldSize];
   int32_t rank;
   int32_t world_size;
 };
 
-__global__ void
-CudaIpcBarrierAllKernel(CudaIpcBarrierAllArgs args) {
-  int32_t **sync_buffers = args.sync_buffers;
+__global__ void CudaIpcBarrierAllKernel(CudaIpcBarrierAllArgs args) {
+  int32_t** sync_buffers = args.sync_buffers;
   int32_t world_size = args.world_size;
   int32_t cur_rank = args.rank;
   if (threadIdx.x < world_size) {
     // set achieved flag for others
-    int32_t *sync_buffer_dst = sync_buffers[threadIdx.x] + cur_rank;
+    int32_t* sync_buffer_dst = sync_buffers[threadIdx.x] + cur_rank;
     uint32_t const data = 1;
 #pragma unroll 1
     while (atomicCAS_system(sync_buffer_dst, 0, 1) != 0) {
     }
-    int32_t *wait_ptr = sync_buffers[cur_rank] + threadIdx.x;
+    int32_t* wait_ptr = sync_buffers[cur_rank] + threadIdx.x;
 #pragma unroll 1
     while (atomicCAS_system(wait_ptr, 1, 0) != 1) {
     }
   }
 }
 
-void
-cudaipc_barrier_all_on_stream_impl(
-    cudaStream_t stream,
-    int32_t **sync_buffer_ptr,
-    int32_t rank,
-    int32_t world_size) {
+void cudaipc_barrier_all_on_stream_impl(cudaStream_t stream,
+                                        int32_t** sync_buffer_ptr,
+                                        int32_t rank,
+                                        int32_t world_size) {
   dim3 grid_dim(1);
   dim3 block_dim(kMaxWorldSize);
   CudaIpcBarrierAllArgs args;
