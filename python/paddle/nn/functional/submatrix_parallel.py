@@ -15,21 +15,59 @@
 from paddle import _C_ops
 
 
-def smp_col_row_row_linear(
-    x, weight, group, bias=None, transpose_weight=False, low_memory=False
-):
+def smp_col_row_row_linear(x, weight, bias, group, low_memory=False):
     ring_id = group.id
 
-    return _C_ops.smp_col_row_row_linear(
+    transpose_weight = x.shape[1] != weight.shape[0]
+
+    out = _C_ops.smp_col_row_row_linear(
         x, weight, bias, transpose_weight, low_memory, ring_id
     )
+    return out
 
 
 def smp_col_row_row_linear_grad(
-    dy, x, weight, group, bias=None, low_memory=True
+    dy,
+    x,
+    weight,
+    group,
+    require_dx,
+    require_dw,
+    require_db,
+    low_memory=True,
 ):
     ring_id = group.id
+    # umiswing: luckily, weight is never transposed in tested case,
+    # but it's necessary to support transposed weight
 
-    return _C_ops.smp_col_row_row_linear_grad(
-        dy, x, weight, bias, low_memory, ring_id
+    dx, dw, db = _C_ops.smp_col_row_row_linear_grad(
+        dy, x, weight, low_memory, require_dx, require_dw, require_db, ring_id
     )
+    return dx, dw, db
+
+
+def smp_row_col_col_linear(x, weight, bias, group, return_x):
+    ring_id = group.id
+
+    transpose_weight = x.shape[1] != weight.shape[0]
+
+    out, global_x = _C_ops.smp_row_col_col_linear(
+        x, weight, bias, transpose_weight, return_x, ring_id
+    )
+    if return_x:
+        return out, global_x
+    else:
+        return out
+
+
+def smp_row_col_col_linear_grad(
+    dy, x, weight, group, require_dx, require_dw, require_db
+):
+    ring_id = group.id
+    # umiswing: luckily, weight is never transposed in tested case,
+    # but it's necessary to support transposed weight
+
+    dx, dw, db = _C_ops.smp_row_col_col_linear_grad(
+        dy, x, weight, require_dx, require_dw, require_db, ring_id
+    )
+    return dx, dw, db

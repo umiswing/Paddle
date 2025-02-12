@@ -617,8 +617,20 @@ void SMPColRowRowLinearInferMeta(const MetaTensor& x,
 
 void SMPColRowRowLinearGradInferMeta(const MetaTensor& x,
                                      const MetaTensor& weight,
+                                     MetaTensor* dx,
                                      MetaTensor* dw,
-                                     MetaTensor* dx);
+                                     MetaTensor* db);
+
+void SMPRowColColLinearInferMeta(const MetaTensor& x,
+                                 const MetaTensor& weight,
+                                 MetaTensor* out,
+                                 MetaTensor* global_x);
+
+void SMPRowColColLinearGradInferMeta(const MetaTensor& x,
+                                     const MetaTensor& weight,
+                                     MetaTensor* dx,
+                                     MetaTensor* dw,
+                                     MetaTensor* db);
 
 void SoftmaxMaskFuseInferMeta(const MetaTensor& x,
                               const MetaTensor& mask,

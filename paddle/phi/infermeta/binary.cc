@@ -3454,7 +3454,7 @@ void ReduceAsInferMeta(const MetaTensor& x,
 
 void SMPColRowRowLinearInferMeta(const MetaTensor& x,
                                  const MetaTensor& weight,
-                                 MetaTensor* output) {
+                                 MetaTensor* out) {
   PADDLE_ENFORCE_EQ(
       x.dims().size(),
       2,
@@ -3468,13 +3468,14 @@ void SMPColRowRowLinearInferMeta(const MetaTensor& x,
           "weight should be 2-D tensor. But received weight dims: [%s].",
           weight.dims()));
 
-  output->set_dtype(x.dtype());
+  out->set_dtype(x.dtype());
 }
 
 void SMPColRowRowLinearGradInferMeta(const MetaTensor& x,
                                      const MetaTensor& weight,
+                                     MetaTensor* dx,
                                      MetaTensor* dw,
-                                     MetaTensor* dx) {
+                                     MetaTensor* db) {
   PADDLE_ENFORCE_EQ(
       x.dims().size(),
       2,
@@ -3493,6 +3494,56 @@ void SMPColRowRowLinearGradInferMeta(const MetaTensor& x,
 
   dx->set_dims(x.dims());
   dx->set_dtype(x.dtype());
+
+  db->set_dtype(x.dtype());
+}
+
+void SMPRowColColLinearInferMeta(const MetaTensor& x,
+                                 const MetaTensor& weight,
+                                 MetaTensor* out,
+                                 MetaTensor* global_x) {
+  PADDLE_ENFORCE_EQ(
+      x.dims().size(),
+      2,
+      phi::errors::InvalidArgument(
+          "x should be 2-D tensor. But received x dims: [%s].", x.dims()));
+
+  PADDLE_ENFORCE_EQ(
+      weight.dims().size(),
+      2,
+      phi::errors::InvalidArgument(
+          "weight should be 2-D tensor. But received weight dims: [%s].",
+          weight.dims()));
+
+  out->set_dtype(x.dtype());
+  global_x->set_dtype(x.dtype());
+}
+
+void SMPRowColColLinearGradInferMeta(const MetaTensor& x,
+                                     const MetaTensor& weight,
+                                     MetaTensor* dx,
+                                     MetaTensor* dw,
+                                     MetaTensor* db) {
+  PADDLE_ENFORCE_EQ(
+      x.dims().size(),
+      2,
+      phi::errors::InvalidArgument(
+          "x should be 2-D tensor. But received x dims: [%s].", x.dims()));
+
+  PADDLE_ENFORCE_EQ(
+      weight.dims().size(),
+      2,
+      phi::errors::InvalidArgument(
+          "weight should be 2-D tensor. But received weight dims: [%s].",
+          weight.dims()));
+
+  dw->set_dims(weight.dims());
+  dw->set_dtype(weight.dtype());
+
+  dx->set_dims(x.dims());
+  dx->set_dtype(x.dtype());
+
+  db->set_dtype(x.dtype());
 }
 
 void SoftmaxMaskFuseInferMeta(const MetaTensor& x,

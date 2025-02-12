@@ -3992,7 +3992,7 @@
 
 - op : smp_col_row_row_linear
   args : (Tensor x, Tensor weight, Tensor bias, bool transpose_weight, bool low_memory, int ring_id)
-  output : Tensor(output)
+  output : Tensor(out)
   infer_meta :
     func : SMPColRowRowLinearInferMeta
     param : [x, weight]
@@ -4002,15 +4002,35 @@
   optional : bias
 
 - op : smp_col_row_row_linear_grad
-  args : (Tensor dy, Tensor x, Tensor weight, Tensor bias, bool low_memory, int ring_id)
-  output : Tensor(dw), Tensor(dx)
+  args : (Tensor dy, Tensor x, Tensor weight, bool low_memory, bool require_dx, bool require_dw, bool require_db, int ring_id)
+  output : Tensor(dx), Tensor(dw), Tensor(db)
   infer_meta :
     func : SMPColRowRowLinearGradInferMeta
     param : [x, weight]
   kernel :
     func : smp_col_row_row_linear_grad
     data_type : dy
+
+- op : smp_row_col_col_linear
+  args : (Tensor x, Tensor weight, Tensor bias, bool transpose_weight, bool return_x, int ring_id)
+  output : Tensor(out), Tensor(global_x)
+  infer_meta :
+    func : SMPRowColColLinearInferMeta
+    param : [x, weight]
+  kernel :
+    func : smp_row_col_col_linear
+    data_type : x
   optional : bias
+
+- op : smp_row_col_col_linear_grad
+  args : (Tensor dy, Tensor x, Tensor weight, bool require_dx, bool require_dw, bool require_db, int ring_id)
+  output : Tensor(dx), Tensor(dw), Tensor(db)
+  infer_meta :
+    func : SMPRowColColLinearGradInferMeta
+    param : [x, weight]
+  kernel :
+    func : smp_row_col_col_linear_grad
+    data_type : dy
 
 - op : softplus
   args : (Tensor x, float beta = 1.0, float threshold = 20.0f)
