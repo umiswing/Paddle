@@ -86,6 +86,12 @@ class SharedLayerDesc(LayerDesc):
         super().__init__(layer_func, *inputs, **kwargs)
         self.layer_name = key
         self.forward_func = forward_func
+        assert isinstance(shared_weight_attr, (str, list))
+        if isinstance(shared_weight_attr, list):
+            for weight_attr in shared_weight_attr:
+                assert isinstance(weight_attr, str)
+        if isinstance(shared_weight_attr, str):
+            shared_weight_attr = [shared_weight_attr]
         self.shared_weight_attr = shared_weight_attr
 
 
@@ -536,11 +542,12 @@ class PipelineLayer(nn.Layer):
     def _synchronize_shared_weights(self):
         for key, comm in self.shared_comm.items():
             with paddle.framework.no_grad():
-                paddle.distributed.broadcast(
-                    getattr(comm['layer'], comm['weight_attr']),
-                    src=min(comm['ranks']),
-                    group=comm['group'],
-                )
+                for weight_attr in comm['weight_attr']:
+                    paddle.distributed.broadcast(
+                        getattr(comm['layer'], weight_attr),
+                        src=min(comm['ranks']),
+                        group=comm['group'],
+                    )
 
             for param in comm['layer'].parameters():
                 if self.global_rank != min(comm['ranks']):
@@ -548,27 +555,28 @@ class PipelineLayer(nn.Layer):
 
     def allreduce_shared_weight_gradients(self):
         for key, comm in self.shared_comm.items():
-            param = getattr(self.shared_layers[key], comm['weight_attr'])
-            # need use trace_op to allreduce weight
-            if framework.in_dynamic_mode():
-                with paddle.framework.no_grad():
-                    paddle.distributed.all_reduce(
-                        param.grad
-                        if not hasattr(param, "main_grad")
-                        else param.main_grad,
-                        group=comm['group'],
-                    )
-            else:
-                with paddle.framework.no_grad():
-                    framework._dygraph_tracer().trace_op(
-                        type="c_allreduce_sum",
-                        inputs={'X': param._grad_ivar()},
-                        outputs={'Out': param._grad_ivar()},
-                        attrs={
-                            'ring_id': comm['group'].id,
-                            'use_calc_stream': True,
-                        },
-                    )
+            for weight_attr in comm['weight_attr']:
+                param = getattr(self.shared_layers[key], weight_attr)
+                # need use trace_op to allreduce weight
+                if framework.in_dynamic_mode():
+                    with paddle.framework.no_grad():
+                        paddle.distributed.all_reduce(
+                            param.grad
+                            if not hasattr(param, "main_grad")
+                            else param.main_grad,
+                            group=comm['group'],
+                        )
+                else:
+                    with paddle.framework.no_grad():
+                        framework._dygraph_tracer().trace_op(
+                            type="c_allreduce_sum",
+                            inputs={'X': param._grad_ivar()},
+                            outputs={'Out': param._grad_ivar()},
+                            attrs={
+                                'ring_id': comm['group'].id,
+                                'use_calc_stream': True,
+                            },
+                        )
 
     def _segment_network_for_interleave(self, seg_method):
         logger.info("start segment network for interleave scheduler")

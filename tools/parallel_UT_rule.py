@@ -568,7 +568,6 @@ HIGH_PARALLEL_JOB_NEW = [
     'test_new_group',
     'test_imperative_signal_handler',
     'test_parallel_dygraph_sharding_parallel',
-    'test_parallel_dygraph_sharding_parallel_fix',
     'test_dist_hapi_model',
     'test_dist_mnist_gradient_merge',
     'test_ir_pass_pipeline',

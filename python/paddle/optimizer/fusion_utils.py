@@ -235,7 +235,7 @@ class FusionStorageHelper:
         self.buffer_length = self.buffer._numel()
 
     def sync_param(self):
-        self.sync_partial_param(0, self.buffer_length - 1)
+        self.sync_partial_param(0, self.buffer_length)
 
     @imperative_base.no_grad()
     def sync_partial_param(self, start, end):
@@ -243,7 +243,7 @@ class FusionStorageHelper:
         assert isinstance(end, int), "end must be an integer"
         assert start >= 0, "start must be non-negative"
         assert (
-            end < self.buffer_length
+            end <= self.buffer_length
         ), "end must be less than or equal to the total buffer length"
         task = async_offload_with_offset(
             src_tensor=self.buffer,

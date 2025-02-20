@@ -2992,6 +2992,35 @@
     func : mode
   backward : mode_grad
 
+- op : moe_dispatch
+  args : (Tensor X, Tensor gating_output, int moe_topk)
+  output : Tensor(out), Tensor(token_nums_per_expert), Tensor(scatter_index), Tensor(expert_scales_float), Tensor(expert_for_source_row_tensor)
+  infer_meta :
+    func : moe_dispatchInferMeta
+  kernel :
+    func : moe_dispatch
+    data_type : X
+
+- op : moe_ffn
+  args : (Tensor X, Tensor rows_per_expert, Tensor ffn1_weight, Tensor ffn1_scale, Tensor ffn1_bias, Tensor ffn2_weight, Tensor ffn2_scale, str quant_method)
+  output : Tensor(ffn_out)
+  infer_meta :
+    func : moe_ffnInferMeta
+  kernel :
+    func : moe_ffn
+    data_type : X
+  optional : ffn1_scale, ffn1_bias, ffn2_scale
+
+- op : moe_reduce
+  args : (Tensor fc2_result, Tensor fc2_expert_biases, Tensor expert_scales_float, Tensor expanded_source_row_to_expanded_dest_row, Tensor topk_indices, bool norm_topk_prob = false)
+  output : Tensor(output)
+  infer_meta :
+    func : moe_reduceInferMeta
+  kernel :
+    func : moe_reduce
+    data_type : fc2_result
+  optional : fc2_expert_biases
+
 - op : momentum_
   args : (Tensor param, Tensor grad, Tensor velocity, Tensor learning_rate, Tensor master_param, float mu, bool use_nesterov = false, str regularization_method = "", float regularization_coeff = 0.0f, bool multi_precision = false, float rescale_grad = 1.0f)
   output : Tensor(param_out), Tensor(velocity_out), Tensor(master_param_out)

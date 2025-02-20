@@ -102,6 +102,12 @@ class CollectiveController(Controller):
 
         self.ctx.logger.debug(f"job endpoints: {job_endpoints}")
 
+        self.ctx.logger.warning(
+            f"master is set by args, it will be overwritten by {job_endpoints[0]}."
+        )
+        # this is neccesary for tcp store to work when endpoints cannot be passed to sub processes.
+        self.ctx.args.master = job_endpoints[0]
+
         rank_offset = (
             ips.index(self.ctx.node.ip) * self.pod.replicas
             if self.ctx.node.ip in ips
@@ -117,6 +123,7 @@ class CollectiveController(Controller):
 
         for i in range(self.pod.replicas):
             e = {
+                "PADDLE_MASTER": self.ctx.args.master,
                 "PADDLE_GLOBAL_SIZE": f"{len(job_endpoints)}",
                 "PADDLE_LOCAL_SIZE": f"{self.pod.replicas}",
                 "PADDLE_GLOBAL_RANK": f"{i + rank_offset}",

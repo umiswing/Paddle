@@ -124,6 +124,7 @@ def convert_dtype(dtype: DTypeLike) -> str:
             'uint16',
             'float32',
             'float64',
+            'int4',
             'int8',
             'int16',
             'int32',

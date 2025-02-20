@@ -32,8 +32,6 @@ FusedMultiTransformer.
 namespace phi {
 namespace fusion {
 
-namespace {  // NOLINT
-
 template <typename T>
 class BiasActHelper {
  public:
@@ -335,8 +333,6 @@ class FFNHelper {
   int dim_embed_;
   std::string gemm_method_;
 };
-
-}  // namespace
 
 }  // namespace fusion
 }  // namespace phi

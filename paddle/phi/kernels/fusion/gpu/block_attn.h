@@ -852,7 +852,8 @@ __global__ __launch_bounds__(THREADS_PER_BLOCK) void gqa_block_attention_kernel(
   float qk_maxs[GQA_SUB_PARTITION_SIZE];
 #pragma unroll
   for (int i = 0; i < GQA_SUB_PARTITION_SIZE; i++) {
-    qk_maxs[i] = -FLT_MAX;
+    // initialize qk_maxs!!!
+    qk_maxs[i] = qk_smem[act_time_step * GQA_SUB_PARTITION_SIZE + i];
   }
 
   // threads in one block can process 'K_PER_ITER' keys
@@ -1297,7 +1298,8 @@ void dispatch_blha_gqa_kernel(const Block_AttN_params<T> &params,
                            stream,
                            load_func,
                            store_func)
-  } else if (params.gqa_num_per_partitions == 4) {
+
+  } else if (params.gqa_num_per_partitions == 2) {
     constexpr int THDS_PER_BLOCK = 1024;
     BLHA_LAUNCH_GQA_KERNEL(T,
                            Dh,
@@ -1307,8 +1309,23 @@ void dispatch_blha_gqa_kernel(const Block_AttN_params<T> &params,
                            THDS_PER_BLOCK,
                            BlockSize,
                            CACHE_TYPE,
-                           4,
-                           4,
+                           2,
+                           2,
+                           stream,
+                           load_func,
+                           store_func)
+  } else if (params.gqa_num_per_partitions == 3) {
+    constexpr int THDS_PER_BLOCK = 1024;
+    BLHA_LAUNCH_GQA_KERNEL(T,
+                           Dh,
+                           Dh_MAX,
+                           THREADS_PER_KEY,
+                           THREADS_PER_VALUE,
+                           THDS_PER_BLOCK,
+                           BlockSize,
+                           CACHE_TYPE,
+                           3,
+                           3,
                            stream,
                            load_func,
                            store_func)
@@ -1478,6 +1495,7 @@ void blha(const phi::GPUContext &dev_ctx,
           const int timestep,
           const int rotary_emb_dims,
           float inv_sqrt_dh,
+          const float rope_theta,
           const bool add_qkv_bias = true,
           const bool neox_rotary_style = false,
           const int quant_round_type = 1,
@@ -1566,6 +1584,7 @@ void blha(const phi::GPUContext &dev_ctx,
   params.timestep = timestep + pre_cache_length;
   params.inv_sqrt_dh = inv_sqrt_dh;
   params.rotary_emb_dims = rotary_emb_dims;
+  params.rope_theta = rope_theta;
   VLOG(3) << "batch_size: " << batch_size << " q_num_head: " << q_num_head
           << " kv_num_head: " << kv_num_head << " block_size: " << block_size
           << " timestep: " << timestep;

@@ -36,6 +36,7 @@ file(
   "selected_rows/gpu/*.cu"
   "sparse/gpu/*.cu"
   "strings/gpu/*.cu"
+  "fusion/fp8_gemm/fp8_gemm_with_cublasLt/*.cu"
   "fusion/gpu/*.cu")
 
 file(
@@ -198,7 +199,8 @@ if(WITH_CUTLASS)
     "fusion/cutlass/memory_efficient_attention/autogen/impl/*.cu"
     "fusion/cutlass/memory_efficient_attention/autogen_variable/impl/*.cu"
     "fusion/cutlass/cutlass_kernels/fpA_intB_gemm/autogen/*.cu"
-    "fusion/cutlass/cutlass_kernels/fpA_intB_gemm/*.cu")
+    "fusion/cutlass/cutlass_kernels/fpA_intB_gemm/*.cu"
+    "fusion/cutlass/cutlass_kernels/moe_gemm/*.cu")
 
   list(APPEND kernel_cu ${cutlass_cu})
 endif()
