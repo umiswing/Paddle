@@ -75,6 +75,7 @@ void FlashAttnV3GradBaseKernel(
     float const softcap,
     bool const deterministic,
     int const sm_margin,
+    bool const support_mla,
     DenseTensor *dq,
     DenseTensor *dk,
     DenseTensor *dv,
@@ -175,6 +176,10 @@ void FlashAttnV3GradBaseKernel(
   int const total_q = !is_varlen_q ? batch_size * sizes[1] : sizes[0];
   int const num_heads = q.dims()[q.dims().size() - 2];
   int const head_size = q.dims()[q.dims().size() - 1];
+  // umiswing: set head_size_v to head_size when mla is not supported, so that
+  // we can check shapes of v, o, do, dv
+  int const head_size_v =
+      support_mla ? v.dims()[v.dims().size() - 1] : head_size;
   int const seqlen_k = !is_varlen_k ? k.dims()[1] : max_seqlen_k_;
   int const total_k = !is_varlen_k ? batch_size * k.dims()[1] : k.dims()[0];
   int const num_heads_k = k.dims()[k.dims().size() - 2];
@@ -251,20 +256,20 @@ void FlashAttnV3GradBaseKernel(
 
   if (!is_varlen_q) {
     CHECK_SHAPE(q, batch_size, seqlen_q, num_heads, head_size);
-    CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, head_size);
-    CHECK_SHAPE(dout, batch_size, seqlen_q, num_heads, head_size);
+    CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, head_size_v);
+    CHECK_SHAPE(dout, batch_size, seqlen_q, num_heads, head_size_v);
   } else {
     CHECK_SHAPE(q, total_q, num_heads, head_size);
-    CHECK_SHAPE(out, total_q, num_heads, head_size);
-    CHECK_SHAPE(dout, total_q, num_heads, head_size);
+    CHECK_SHAPE(out, total_q, num_heads, head_size_v);
+    CHECK_SHAPE(dout, total_q, num_heads, head_size_v);
     CHECK_SHAPE(cu_seqlens_q, batch_size + 1);
   }
   if (!is_varlen_k) {
     CHECK_SHAPE(k, batch_size, seqlen_k, num_heads_k, head_size);
-    CHECK_SHAPE(v, batch_size, seqlen_k, num_heads_k, head_size);
+    CHECK_SHAPE(v, batch_size, seqlen_k, num_heads_k, head_size_v);
   } else {
     CHECK_SHAPE(k, total_k, num_heads_k, head_size);
-    CHECK_SHAPE(v, total_k, num_heads_k, head_size);
+    CHECK_SHAPE(v, total_k, num_heads_k, head_size_v);
     CHECK_SHAPE(cu_seqlens_k, batch_size + 1);
   }
 
@@ -325,9 +330,9 @@ void FlashAttnV3GradBaseKernel(
                       1,
                       "dv must have contiguous last dimension");
     if (!is_varlen_k) {
-      CHECK_SHAPE((*dv), batch_size, seqlen_k, num_heads_k, head_size);
+      CHECK_SHAPE((*dv), batch_size, seqlen_k, num_heads_k, head_size_v);
     } else {
-      CHECK_SHAPE((*dv), total_k, num_heads_k, head_size);
+      CHECK_SHAPE((*dv), total_k, num_heads_k, head_size_v);
     }
   } else {
     *dv = phi::EmptyLike<T, Context>(ctx, v);
@@ -374,6 +379,7 @@ void FlashAttnV3GradBaseKernel(
     }
     ctx.template Alloc<float>(dq_accum);
   }
+  // TODO(umiswing): prevent mla here
   if (num_heads_k != num_heads) {  // MQA / GQA
     if (!is_varlen) {
       if (dk_accum) {
@@ -453,9 +459,10 @@ void FlashAttnV3GradBaseKernel(
   dynload::fa3_bwd_params_set_total_k(params_handle, total_k);
   dynload::fa3_bwd_params_set_softmax_lse_log2_ptr(
       params_handle, softmax_lse_log2 ? softmax_lse_log2->data() : nullptr);
-  dynload::fa3_bwd_params_set_dv(params_handle,
-                                 head_size);  // We don't support hdim_v being
-                                              // different from hdim_qk for now
+  dynload::fa3_bwd_params_set_dv(
+      params_handle,
+      head_size_v);  // We don't support hdim_v being
+                     // different from hdim_qk for now
 
   // auto tile_count_semaphore = (params.is_causal || params.is_local) ?
   // paddle::zeros({1}, opts.dtype(torch::kInt32)) : torch::empty({1},
@@ -539,6 +546,7 @@ void FlashAttnV3GradKernel(
     DenseTensor *dq,
     DenseTensor *dk,
     DenseTensor *dv) {
+  constexpr bool support_mla = true;
   // TODO(umiswing): fix me
   DenseTensor softmax_d;
   DenseTensor softmax_lse_log2;
@@ -557,7 +565,8 @@ void FlashAttnV3GradKernel(
   const int64_t h_k = k.dims()[2];
   const int64_t d_q = q.dims()[3];
   const int64_t d_v = v.dims()[3];
-  if (q.dims()[q.dims().size() - 1] > v.dims()[v.dims().size() - 1]) {
+  if (!support_mla &&
+      q.dims()[q.dims().size() - 1] > v.dims()[v.dims().size() - 1]) {
     PADDLE_ENFORCE_EQ(v.dims()[v.dims().size() - 1],
                       out.dims()[out.dims().size() - 1],
                       "dv != do");
@@ -601,6 +610,7 @@ void FlashAttnV3GradKernel(
                                         softcap,
                                         FLAGS_cudnn_deterministic,
                                         sm_margin,
+                                        support_mla,
                                         dq,
                                         dk,
                                         &dv_padded,
@@ -610,7 +620,8 @@ void FlashAttnV3GradKernel(
                                         &dk_accum,
                                         &dv_accum);
 
-  if (q.dims()[q.dims().size() - 1] > v.dims()[v.dims().size() - 1]) {
+  if (!support_mla &&
+      q.dims()[q.dims().size() - 1] > v.dims()[v.dims().size() - 1]) {
     *dv = Slice<T, Context>(ctx, dv_padded, {3}, {0}, {d_v});
   } else {
     *dv = dv_padded;
