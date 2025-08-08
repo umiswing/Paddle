@@ -31,12 +31,8 @@
 #include <iostream>
 #include <vector>
 
-#include "paddle/common/flags.h"
 #include "paddle/phi/core/enforce.h"
 // Utility functions for TCP socket.
-
-COMMON_DECLARE_int64(tcp_max_syn_backlog);
-
 namespace phi {
 namespace distributed {
 

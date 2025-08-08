@@ -22,6 +22,8 @@
 
 #include "paddle/common/flags.h"
 
+COMMON_DECLARE_int64(tcp_max_syn_backlog);
+
 namespace phi {
 namespace distributed {
 namespace tcputils {
