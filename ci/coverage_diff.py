@@ -40,7 +40,7 @@ def get_diff_file_lines(diff_file):
             line = line.strip()
 
             if line.startswith('+++ '):
-                current_file = line.removeprefix('+++ ')
+                current_file = line.lstrip('+++ ')
 
                 diff_file_lines[current_file] = []
 
