@@ -1965,7 +1965,7 @@ void FlashMaskV2BaseKernel(
     // of kBlockN is not divisible by 32 flashmask_maxmin_shape[2] =
     // (flashmask_maxmin_shape[2] + 31) / 32 * 8;
 
-    int device_id = dev_ctx.GetPlace().GetDeviceId();
+    int device_id = ctx.GetPlace().GetDeviceId();
     auto dprops = paddle::platform::GetDeviceProperties(device_id);
     const bool is_sm90 = dprops.major == 9 && dprops.minor == 0;
 
