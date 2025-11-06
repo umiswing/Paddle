@@ -28,25 +28,25 @@ jobs:
           workflow-name: codestyle
 
       - name: Merge PR to test branch
-        if: false
+        if: steps.check-bypass.outputs.can-skip != 'true'
         run: |
           git fetch origin pull/${PR_ID}/merge
           git checkout -b test FETCH_HEAD
 
       - name: Setup python3.12
-        if: false
+        if: steps.check-bypass.outputs.can-skip != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
 
       - name: Install dependencies
-        if: false
+        if: steps.check-bypass.outputs.can-skip != 'true'
         run: |
           pip install pre-commit==2.17.0 cpplint==1.6.0  clang-format==13.0.0
 
       - name: Check pre-commit
-        if: false
+        if: steps.check-bypass.outputs.can-skip != 'true'
         env:
           SKIP_CLANG_TIDY_CHECK: "ON"
         run: |

@@ -26,7 +26,6 @@ defaults:
 jobs:
   build:
     name: Build
-    if: false
     outputs:
       can-skip: ${{ steps.check-bypass.outputs.can-skip }}
     runs-on:
@@ -218,7 +217,7 @@ jobs:
           '
 
       - name: Terminate and delete the container
-        if: steps.check-bypass.outputs.can-skip != 'true'
+        if: ${{ steps.check-bypass.outputs.can-skip != 'true' && always() }}
         run: |
           set +e
           docker exec -t ${{ env.container_name }} /bin/bash -c 'rm -rf * .[^.]*'
@@ -226,8 +225,8 @@ jobs:
 
   test:
     name: Test
-    if: false
     needs: build
+    if: ${{ needs.build.outputs.can-skip != 'true' }}
     runs-on:
       group: Distribute
     steps:
