@@ -31,7 +31,6 @@ from .pipeline_parallel import (  # noqa: F401
     PipelineParallelMicroStepLocations,
     PipelineParallelWithInterleave,
     PipelineParallelWithInterleaveFthenB,
-    PipelineDatasetPreprocessor,
     VPPFhenBInBalancedMemory,
     register_global_pipeline_parallel_hook,
 )
